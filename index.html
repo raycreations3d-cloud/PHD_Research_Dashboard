@@ -155,7 +155,7 @@
   <header class="top">
     <div>
       <h1>Obesity x Breast Cancer - Research Dashboard</h1>
-      <div class="sub">Inflammatory &amp; immune profiling across cancer progression - transgenic murine model &middot; build 24</div>
+      <div class="sub">Inflammatory &amp; immune profiling across cancer progression - transgenic murine model &middot; build 29</div>
     </div>
     <div class="userbox">
       <span id="whoami"></span>
@@ -215,7 +215,7 @@
             <div class="field"><label>Filter group</label><select id="miceGroupFilter" onchange="renderMice()"></select></div>
             <div class="field"><label>Filter timepoint</label><select id="miceTimepointFilter" onchange="renderMice()"></select></div>
           </div>
-          <div class="tablewrap"><table id="miceTable"></table></div>
+          <div class="tablewrap" style="max-height:none"><table id="miceTable"></table></div>
         </div>
       </div>
       <div id="miceEntry" class="hide">
@@ -486,9 +486,28 @@
     <!-- ===== TERMINATION ===== -->
     <section id="tab-termination" class="tabpage">
       <div class="card">
+        <h2>Total tumour volume per mouse</h2>
+        <p class="hint">Sum of all site volumes (mm&sup3;) for each terminated mouse, coloured by group.</p>
+        <div class="chartbox"><canvas id="termBurden"></canvas></div>
+      </div>
+      <div class="card">
+        <h2>Mean tumour volume by site (by group)</h2>
+        <div class="chartbox"><canvas id="termSite"></canvas></div>
+        <div class="legendrow"><span class="lg-wt">WT-CD</span><span class="lg-cd">TB-CD</span><span class="lg-hfd">TB-HFD</span></div>
+      </div>
+      <div class="card">
+        <h2>Organ / tissue weight by group</h2>
+        <div class="toolbar"><div class="field"><label>Organ / tissue</label><select id="termOrganSel"></select></div></div>
+        <div class="chartbox"><canvas id="termOrganChart"></canvas></div>
+      </div>
+      <div class="card">
+        <h2>Lung metastasis - total lesions by group (mean)</h2>
+        <div class="chartbox"><canvas id="termLungs"></canvas></div>
+      </div>
+      <div class="card">
         <h2>Termination records</h2>
         <p class="hint">Terminal necropsy data (one per mouse). Enter or edit via the Mice tab (open a mouse -> Termination) or the Termination segment. Table scrolls sideways.</p>
-        <div class="tablewrap"><table id="terminationTable"></table></div>
+        <div class="tablewrap" style="max-height:none"><table id="terminationTable"></table></div>
       </div>
     </section>
 
@@ -627,6 +646,7 @@ function init(){
   document.getElementById('ogttIndivTp').innerHTML = TIMEPOINTS.map(function(t){return '<option>'+t+'</option>';}).join('');
   document.getElementById('ogttIndivGrp').innerHTML = '<option value="">All groups</option>'+GROUPS.map(function(g){return '<option value="'+g.code+'">'+g.code+'</option>';}).join('');
   document.getElementById('analyteKey').innerHTML = ANALYTES.map(function(a){return '<option value="'+a.key+'">'+a.label+'</option>';}).join('');
+  document.getElementById('termOrganSel').innerHTML = TERM_ORGANS.map(function(o){return '<option value="'+o[0]+'">'+o[1]+'</option>';}).join('');
 
   document.getElementById('tabbar').addEventListener('click', function(e){
     var b=e.target.closest('button[data-tab]'); if(!b) return;
@@ -649,7 +669,7 @@ function init(){
   wireAgeFields();
   wireTumourVolumes();
 
-  ['ogttTp','ogttIndivTp','ogttIndivGrp','analyteKey','flowPop','flowTissue','ihcMarker'].forEach(function(id){
+  ['ogttTp','ogttIndivTp','ogttIndivGrp','analyteKey','flowPop','flowTissue','ihcMarker','termOrganSel'].forEach(function(id){
     var el=document.getElementById(id);
     if(el) el.addEventListener('change',renderCharts);
   });
@@ -955,6 +975,42 @@ function renderCharts(){
   renderAnalyte();
   renderFlow();
   renderIhc();
+  renderTermCharts();
+}
+var TERM_ORGANS=[['mammary','Mammary tissue'],['lungs','Lungs'],['liver','Liver'],['pancreas','Pancreas'],['brain','Brain'],['adrenal','Adrenal glands'],['heart','Heart'],['spleen','Spleen'],['thymus','Thymus'],['kidney_l','Left kidney'],['kidney_r','Right kidney'],['gastrocnemius','Gastrocnemius muscle'],['bat','Interscapular brown adipose'],['sat_inguinal','SAT (inguinal)'],['gwat','Gonadal white adipose'],['ovaries','Ovaries'],['lymph_nodes','Lymph nodes'],['stomach','Stomach']];
+function termSumVol(r){ var s=0; for(var i=1;i<=10;i++){ var v=r['site'+i+'_volume']; if(v!=null&&!isNaN(v)) s+=Number(v); } return s; }
+function grpColor(code){ var g=GROUPS.filter(function(x){return x.code===code;})[0]; return g?g.color:'#94a3b8'; }
+function renderTermCharts(){
+  if(typeof Chart==='undefined') return;
+  var rows=cache.termination||[];
+  // 1) total tumour volume per mouse
+  var rs=rows.slice().sort(function(a,b){ return (parseFloat(a.animal_id)||0)-(parseFloat(b.animal_id)||0); });
+  draw('termBurden',{type:'bar',
+    data:{labels:rs.map(function(r){return r.animal_id;}),
+      datasets:[{label:'Total tumour volume (mm3)', backgroundColor:rs.map(function(r){return grpColor(effGrp(r));}),
+        data:rs.map(function(r){ return Math.round(termSumVol(r)*100)/100; })}]},
+    options:barOpts('Total tumour volume (mm3)')});
+  // 2) mean tumour volume by site by group
+  var siteLabels=[]; for(var i=1;i<=10;i++) siteLabels.push('Site '+i);
+  draw('termSite',{type:'bar',
+    data:{labels:siteLabels,
+      datasets:GROUPS.map(function(g){ return {label:g.code, backgroundColor:g.color,
+        data:(function(){ var arr=[]; for(var i=1;i<=10;i++){ var vals=rows.filter(function(r){return effGrp(r)===g.code;}).map(function(r){return r['site'+i+'_volume'];}); var m=meanSem(vals).mean; arr.push(m==null?null:Math.round(m*100)/100); } return arr; })()}; })},
+    options:barOpts('Mean tumour volume (mm3)')});
+  // 3) organ weight by group
+  var sel=document.getElementById('termOrganSel'); var ok=sel?sel.value:'liver';
+  var ol=(TERM_ORGANS.filter(function(o){return o[0]===ok;})[0]||['','organ'])[1];
+  draw('termOrganChart',{type:'bar',
+    data:{labels:GROUPS.map(function(g){return g.code;}),
+      datasets:[{label:ol+' (mean)', backgroundColor:GROUPS.map(function(g){return g.color;}),
+        data:GROUPS.map(function(g){ return meanSem(rows.filter(function(r){return effGrp(r)===g.code;}).map(function(r){return r[ok];})).mean; })}]},
+    options:barOpts(ol+' weight')});
+  // 4) total lung lesions by group
+  draw('termLungs',{type:'bar',
+    data:{labels:GROUPS.map(function(g){return g.code;}),
+      datasets:[{label:'Mean total lesions', backgroundColor:GROUPS.map(function(g){return g.color;}),
+        data:GROUPS.map(function(g){ return meanSem(rows.filter(function(r){return effGrp(r)===g.code;}).map(function(r){return r.total_lesions;})).mean; })}]},
+    options:barOpts('Mean total lung lesions')});
 }
 
 function renderOverviewChart(){
@@ -1128,7 +1184,7 @@ function renderProgress(){
 function animalsForId(aid){ for(var i=0;i<animalsCache.length;i++){ if(animalsCache[i].animal_id===aid) return animalsCache[i]; } return null; }
 function groupLabel(code){ for(var i=0;i<GROUPS.length;i++){ if(GROUPS[i].code===code) return GROUPS[i].label; } return code||'-'; }
 function jsstr(s){ return (''+s).replace(/\\/g,'\\\\').replace(/'/g,"\\'"); }
-function recordCount(aid){ var n=0; ['ogtt','plasma','flow_cytometry','ihc'].forEach(function(t){ n+=cache[t].filter(function(r){return r.animal_id===aid;}).length; }); return n; }
+function recordCount(aid){ var n=0; ['ogtt','plasma','flow_cytometry','ihc','termination'].forEach(function(t){ n+=cache[t].filter(function(r){return String(r.animal_id)===String(aid);}).length; }); return n; }
 
 function tableHtml(table, rows, readonly){
   var cols=COLS[table];
@@ -1137,7 +1193,7 @@ function tableHtml(table, rows, readonly){
   var body='<tbody>'+rows.map(function(r){
     var cells=cols.map(function(c){
       if(c==='grp'){ var _g=r.grp; var _m=animalsForId(r.animal_id); if((!_g) && _m) _g=_m.grp; _g=_g||''; return '<td>'+(_g?'<span class="pill '+_g+'">'+_g+'</span>':'<span class="muted">-</span>')+'</td>'; }
-      var _dv = DATE_COLS[c] ? isoToDMY(r[c]) : (r[c]==null?'':(''+r[c]));
+      var _dv = DATE_COLS[c] ? isoToDMY(r[c]) : ((/_volume$/.test(c) && r[c]!=null && r[c]!=='' && !isNaN(r[c])) ? Number(r[c]).toFixed(2) : (r[c]==null?'':(''+r[c])));
       return '<td>'+escapeHtml(_dv)+'</td>';
     }).join('');
     return '<tr>'+cells+(readonly?'':'<td><div class="row-actions">'+
@@ -1317,12 +1373,44 @@ function showAddMouse(){
   activateTab('mice'); showMiceEntry(); showSeg('ogtt');
   window.scrollTo({top:0,behavior:'smooth'});
 }
+function setFormContext(f, aid, grp){
+  if(f.elements['animal_id']) f.elements['animal_id'].value=aid||'';
+  if(f.elements['grp']) f.elements['grp'].value=grp||'';
+}
+function fillFormFromRec(formId, table, rec, aid, grp, defTp){
+  var f=document.getElementById(formId); if(!f) return;
+  f.reset();
+  var ms=f.querySelectorAll('.msel'); for(var i=0;i<ms.length;i++){ setMultiSelect(ms[i],[]); }
+  if(rec){
+    f.elements['id'].value=rec.id;
+    COLS[table].forEach(function(col){ if(f.elements[col]) f.elements[col].value = DATE_COLS[col]? isoToDMY(rec[col]) : (rec[col]==null?'':rec[col]); });
+  } else {
+    if(f.elements['id']) f.elements['id'].value='';
+    if(defTp && f.elements['timepoint']) f.elements['timepoint'].value=defTp;
+  }
+  setFormContext(f, aid, grp);
+}
+function loadMouseAssaysIntoForms(m){
+  var aid=m.animal_id, grp=m.grp;
+  function one(table, tp){ return cache[table].filter(function(r){return String(r.animal_id)===String(aid) && (tp==null||r.timepoint===tp);})[0]; }
+  fillFormFromRec('ogttForm','ogtt', one('ogtt','Baseline'), aid, grp, 'Baseline');
+  fillFormFromRec('ogttForm2','ogtt', one('ogtt','Endpoint'), aid, grp, 'Endpoint');
+  fillFormFromRec('plasmaForm','plasma', one('plasma',null), aid, grp);
+  fillFormFromRec('flowForm','flow_cytometry', null, aid, grp);
+  fillFormFromRec('ihcForm','ihc', null, aid, grp);
+  var tr=one('termination',null);
+  fillFormFromRec('terminationForm','termination', tr, aid, grp);
+  var tt=document.getElementById('termTumoursTop'), tb=document.getElementById('termTumoursBottom');
+  if(tr){ if(tt) setMultiSelect(tt,(tr.tumours_top||'').split(/[, ]+/)); if(tb) setMultiSelect(tb,(tr.tumours_bottom||'').split(/[, ]+/)); }
+  else { if(tt) setMultiSelect(tt,[]); if(tb) setMultiSelect(tb,[]); }
+  computeTumourVolumes(); computeTotalLesions();
+}
 function loadMouseIntoForm(m){
   var form=document.getElementById('mouseForm'); form.elements['id'].value=m.id;
   ANIMAL_COLS.forEach(function(c){ if(form.elements[c]) form.elements[c].value = DATE_COLS[c]? isoToDMY(m[c]) : (m[c]==null?'':m[c]); });
   var tmSel=document.getElementById('mouseTumourSite'); if(tmSel) setMultiSelect(tmSel, (m.tumour_site||'').split(/[, ]+/));
   var tmf=document.getElementById('mouseFixedTumourSite'); if(tmf) setMultiSelect(tmf, (m.tumour_site_fixed||'').split(/[, ]+/));
-  prefillAssayForms(m.animal_id, m.grp);
+  loadMouseAssaysIntoForms(m);
   updateAges();
 }
 function updateAges(){
