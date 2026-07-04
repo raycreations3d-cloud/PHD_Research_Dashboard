@@ -155,7 +155,7 @@
   <header class="top">
     <div>
       <h1>Obesity x Breast Cancer - Research Dashboard</h1>
-      <div class="sub">Inflammatory &amp; immune profiling across cancer progression - transgenic murine model</div>
+      <div class="sub">Inflammatory &amp; immune profiling across cancer progression - transgenic murine model &middot; build 9</div>
     </div>
     <div class="userbox">
       <span id="whoami"></span>
@@ -1344,7 +1344,7 @@ function buildOgttRec(fid){
   return { rec:rec, bad:bad, id:fd.get('id') };
 }
 function ogttHasData(rec){
-  return ['body_weight','glucose_vol','bg_0','bg_15','bg_30','bg_60','bg_90','bg_120','notes'].some(function(k){ return rec[k]!=null && rec[k]!==''; });
+  return ['test_date','body_weight','glucose_vol','bg_0','bg_15','bg_30','bg_60','bg_90','bg_120','notes'].some(function(k){ return rec[k]!=null && rec[k]!==''; });
 }
 function saveOgttBoth(){
   var a=buildOgttRec('ogttForm'), b=buildOgttRec('ogttForm2');
@@ -1411,13 +1411,17 @@ function saveAll(){
     ['ogttForm','ogttForm2'].forEach(function(fid){
       var o=buildOgttRec(fid); if(o.bad){ bad=true; return; }
       if(!o.rec.animal_id) return;
-      if(o.id){ jobs.push(sb.from('ogtt').update(o.rec).eq('id',o.id).select()); }
+      var oid=o.id;
+      if(!oid){ var ex=cache.ogtt.filter(function(r){return String(r.animal_id)===String(o.rec.animal_id) && (r.timepoint||'')===(o.rec.timepoint||'');})[0]; if(ex) oid=ex.id; }
+      if(oid){ jobs.push(sb.from('ogtt').update(o.rec).eq('id',oid).select()); }
       else if(ogttHasData(o.rec)){ jobs.push(sb.from('ogtt').insert([o.rec]).select()); }
     });
     [['plasmaForm','plasma'],['flowForm','flow_cytometry'],['ihcForm','ihc']].forEach(function(p){
       var r=buildAssayRec(p[0], p[1]); if(r.bad){ bad=true; return; }
       if(!r.rec.animal_id) return;
-      if(r.id){ jobs.push(sb.from(p[1]).update(r.rec).eq('id',r.id).select()); }
+      var rid=r.id;
+      if(!rid && p[1]==='plasma'){ var ex=cache.plasma.filter(function(x){return String(x.animal_id)===String(r.rec.animal_id) && (x.timepoint||'')===(r.rec.timepoint||'');})[0]; if(ex) rid=ex.id; }
+      if(rid){ jobs.push(sb.from(p[1]).update(r.rec).eq('id',rid).select()); }
       else if(hasAssayData(p[1], r.rec)){ jobs.push(sb.from(p[1]).insert([r.rec]).select()); }
     });
     if(bad){ flash('Check the date - use dd/mm/yyyy.','err'); return; }
