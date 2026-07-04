@@ -155,7 +155,7 @@
   <header class="top">
     <div>
       <h1>Obesity x Breast Cancer - Research Dashboard</h1>
-      <div class="sub">Inflammatory &amp; immune profiling across cancer progression - transgenic murine model &middot; build 9</div>
+      <div class="sub">Inflammatory &amp; immune profiling across cancer progression - transgenic murine model &middot; build 11</div>
     </div>
     <div class="userbox">
       <span id="whoami"></span>
@@ -373,6 +373,15 @@
         <div class="legendrow"><span class="lg-wt">WT-CD</span><span class="lg-cd">TB-CD</span><span class="lg-hfd">TB-HFD</span></div>
       </div>
       <div class="card">
+        <h2>Individual OGTT curves (per mouse)</h2>
+        <p class="hint">One line per mouse (no averaging). Filter by group; each line is labelled by Animal ID.</p>
+        <div class="toolbar">
+          <div class="field"><label>Timepoint</label><select id="ogttIndivTp"></select></div>
+          <div class="field"><label>Group</label><select id="ogttIndivGrp"></select></div>
+        </div>
+        <div class="chartbox"><canvas id="ogttIndiv"></canvas></div>
+      </div>
+      <div class="card">
         <h2>Glucose AUC &amp; body weight (mean of group)</h2>
         <div class="grid g2">
           <div class="chartbox"><canvas id="ogttAuc"></canvas></div>
@@ -558,6 +567,8 @@ function init(){
   var _df=document.getElementById('ogttForm2'); if(_df&&_df.elements['timepoint']) _df.elements['timepoint'].value='Endpoint';
   document.getElementById('tpList').innerHTML = TIMEPOINTS.map(function(t){return '<option>'+t+'</option>';}).join('');
   document.getElementById('ogttTp').innerHTML = TIMEPOINTS.map(function(t){return '<option>'+t+'</option>';}).join('');
+  document.getElementById('ogttIndivTp').innerHTML = TIMEPOINTS.map(function(t){return '<option>'+t+'</option>';}).join('');
+  document.getElementById('ogttIndivGrp').innerHTML = '<option value="">All groups</option>'+GROUPS.map(function(g){return '<option value="'+g.code+'">'+g.code+'</option>';}).join('');
   document.getElementById('analyteKey').innerHTML = ANALYTES.map(function(a){return '<option value="'+a.key+'">'+a.label+'</option>';}).join('');
 
   document.getElementById('tabbar').addEventListener('click', function(e){
@@ -578,7 +589,7 @@ function init(){
   wireDateInputs();
   lockAssayContextFields();
 
-  ['ogttTp','analyteKey','flowPop','flowTissue','ihcMarker'].forEach(function(id){
+  ['ogttTp','ogttIndivTp','ogttIndivGrp','analyteKey','flowPop','flowTissue','ihcMarker'].forEach(function(id){
     var el=document.getElementById(id);
     if(el) el.addEventListener('change',renderCharts);
   });
@@ -848,8 +859,9 @@ function auc(times,vals){
   }
   return a;
 }
+function effGrp(r){ if(r.grp) return r.grp; var m=animalsForId(r.animal_id); return (m && m.grp) ? m.grp : ''; }
 function rowsFor(table,grp,tp){
-  return cache[table].filter(function(r){ return r.grp===grp && (tp==null||r.timepoint===tp); });
+  return cache[table].filter(function(r){ return effGrp(r)===grp && (tp==null||r.timepoint===tp); });
 }
 
 /* ============================================================
@@ -870,6 +882,7 @@ function renderCharts(){
   if(typeof Chart==='undefined') return;
   renderOverviewChart();
   renderOgttCurve();
+  renderOgttIndiv();
   renderOgttAuc();
   renderBodyWeight();
   renderAnalyte();
@@ -882,7 +895,7 @@ function renderOverviewChart(){
   draw('overviewChart',{type:'bar',
     data:{labels:assays.map(function(a){return a[1];}),
       datasets:GROUPS.map(function(g){return {label:g.code,backgroundColor:g.color,
-        data:assays.map(function(a){return cache[a[0]].filter(function(r){return r.grp===g.code;}).length;})};})},
+        data:assays.map(function(a){return cache[a[0]].filter(function(r){return effGrp(r)===g.code;}).length;})};})},
     options:barOpts('records')});
 }
 
@@ -894,6 +907,27 @@ function renderOgttCurve(){
     return {label:g.code,borderColor:g.color,backgroundColor:g.color,tension:.25,spanGaps:true,data:data};
   });
   draw('ogttCurve',{type:'line',
+    data:{labels:OGTT_TIMES,datasets:datasets},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{position:'top'}},
+      scales:{x:{title:{display:true,text:'Time (min)'}},
+              y:{title:{display:true,text:'Blood glucose'},beginAtZero:false}}}});
+}
+
+function renderOgttIndiv(){
+  var tp=document.getElementById('ogttIndivTp').value;
+  var gf=document.getElementById('ogttIndivGrp').value;
+  var rows=cache.ogtt.filter(function(r){
+    if(r.timepoint!==tp) return false;
+    if(gf && effGrp(r)!==gf) return false;
+    return true;
+  });
+  var datasets=rows.map(function(r,i){
+    var col='hsl('+((i*57)%360)+',65%,45%)';
+    return {label:(r.animal_id||'?')+' ('+(effGrp(r)||'-')+')', borderColor:col, backgroundColor:col, tension:.25, spanGaps:true, pointRadius:2,
+      data:OGTT_KEYS.map(function(k){ return r[k]==null?null:Number(r[k]); })};
+  });
+  draw('ogttIndiv',{type:'line',
     data:{labels:OGTT_TIMES,datasets:datasets},
     options:{responsive:true,maintainAspectRatio:false,
       plugins:{legend:{position:'top'}},
@@ -959,7 +993,7 @@ function renderIhc(){
   draw('ihcChart',{type:'bar',
     data:{labels:GROUPS.map(function(g){return g.code;}),
       datasets:[{label:marker||'marker',backgroundColor:GROUPS.map(function(g){return g.color;}),
-        data:GROUPS.map(function(g){return meanSem(cache.ihc.filter(function(r){return r.grp===g.code && r.marker===marker;}).map(function(r){return r.value;})).mean;})}]},
+        data:GROUPS.map(function(g){return meanSem(cache.ihc.filter(function(r){return effGrp(r)===g.code && r.marker===marker;}).map(function(r){return r.value;})).mean;})}]},
     options:barOpts(marker||'value')});
 }
 
