@@ -155,7 +155,7 @@
   <header class="top">
     <div>
       <h1>Obesity x Breast Cancer - Research Dashboard</h1>
-      <div class="sub">Inflammatory &amp; immune profiling across cancer progression - transgenic murine model &middot; build 11</div>
+      <div class="sub">Inflammatory &amp; immune profiling across cancer progression - transgenic murine model &middot; build 13</div>
     </div>
     <div class="userbox">
       <span id="whoami"></span>
@@ -230,12 +230,21 @@
               <div><label>Animal ID *</label><input name="animal_id" required list="animalList"></div>
               <div><label>Group</label><select name="grp" data-groups></select></div>
               <div><label>Timepoint</label><select name="timepoint" data-study-tps></select></div>
-              <div><label>Site(s) of tumour</label><div id="mouseTumourSite" data-name="tumour_site"></div></div>
+              <div><label>Primary Tumour(s)</label><div id="mouseTumourSite" data-name="tumour_site"></div></div>
             </div>
             <div class="grid g4" style="margin-top:12px">
               <div><label>Date of birth</label><input name="dob" type="text" class="datein" placeholder="dd/mm/yyyy" inputmode="numeric" maxlength="10"></div>
               <div><label>Date of palpable tumour</label><input name="palpable_date" type="text" class="datein" placeholder="dd/mm/yyyy" inputmode="numeric" maxlength="10"></div>
               <div><label>Date of termination</label><input name="termination_date" type="text" class="datein" placeholder="dd/mm/yyyy" inputmode="numeric" maxlength="10"></div>
+              <div><label>Site(s) of Fixed Tumour</label><div id="mouseFixedTumourSite" data-name="tumour_site_fixed"></div></div>
+            </div>
+            <div class="grid g4" style="margin-top:12px">
+              <div></div>
+              <div><label>Age at palpable (days from DOB)</label><input id="agePalpable" class="locked" readonly placeholder="-"></div>
+              <div><label>Age at termination (days from DOB)</label><input id="ageTermination" class="locked" readonly placeholder="-"></div>
+              <div></div>
+            </div>
+            <div class="grid" style="margin-top:12px">
               <div><label>Notes</label><input name="notes" placeholder="e.g. humane endpoint, comments"></div>
             </div>
         </form>
@@ -516,7 +525,7 @@ var GROUPS = [
 var TIMEPOINTS = ['Baseline','Endpoint'];
 var STUDY_TIMEPOINTS = ['Day 40','DP 0','DP+4'];
 var TARGET_PER_CELL = 9;
-var ANIMAL_COLS = ['animal_id','grp','timepoint','tumour_site','dob','palpable_date','termination_date','notes'];
+var ANIMAL_COLS = ['animal_id','grp','timepoint','tumour_site','tumour_site_fixed','dob','palpable_date','termination_date','notes'];
 var SEX_OPTS = ['','Male','Female'];
 var STATUS_OPTS = ['Active','Terminated'];
 var OGTT_TIMES = [0,15,30,60,90,120];
@@ -588,6 +597,7 @@ function init(){
   wireGroupInheritance();
   wireDateInputs();
   lockAssayContextFields();
+  wireAgeFields();
 
   ['ogttTp','ogttIndivTp','ogttIndivGrp','analyteKey','flowPop','flowTissue','ihcMarker'].forEach(function(id){
     var el=document.getElementById(id);
@@ -1088,6 +1098,7 @@ function fillMouseSelects(){
   if(st) st.innerHTML=STATUS_OPTS.map(function(o){return '<option>'+o+'</option>';}).join('');
   var opts=[]; for(var i=1;i<=10;i++){ opts.push(''+i); }
   initMultiSelect(document.getElementById('mouseTumourSite'), opts);
+  initMultiSelect(document.getElementById('mouseFixedTumourSite'), opts);
 }
 function bindMouseForm(){
   var form=document.getElementById('mouseForm');
@@ -1246,7 +1257,25 @@ function loadMouseIntoForm(m){
   var form=document.getElementById('mouseForm'); form.elements['id'].value=m.id;
   ANIMAL_COLS.forEach(function(c){ if(form.elements[c]) form.elements[c].value = DATE_COLS[c]? isoToDMY(m[c]) : (m[c]==null?'':m[c]); });
   var tmSel=document.getElementById('mouseTumourSite'); if(tmSel) setMultiSelect(tmSel, (m.tumour_site||'').split(/[, ]+/));
+  var tmf=document.getElementById('mouseFixedTumourSite'); if(tmf) setMultiSelect(tmf, (m.tumour_site_fixed||'').split(/[, ]+/));
   prefillAssayForms(m.animal_id, m.grp);
+  updateAges();
+}
+function updateAges(){
+  var f=document.getElementById('mouseForm'); if(!f) return;
+  var dob=f.elements['dob']?f.elements['dob'].value:'';
+  function diff(target){
+    var a=dmyToIso(dob), b=dmyToIso(target);
+    if(!a || !b) return '';
+    var days=Math.round((new Date(b+'T00:00:00') - new Date(a+'T00:00:00'))/86400000);
+    return isNaN(days)?'':(days+' days');
+  }
+  var ap=document.getElementById('agePalpable'); if(ap) ap.value=diff(f.elements['palpable_date']?f.elements['palpable_date'].value:'');
+  var at=document.getElementById('ageTermination'); if(at) at.value=diff(f.elements['termination_date']?f.elements['termination_date'].value:'');
+}
+function wireAgeFields(){
+  var f=document.getElementById('mouseForm'); if(!f) return;
+  ['dob','palpable_date','termination_date'].forEach(function(n){ if(f.elements[n]) f.elements[n].addEventListener('input', updateAges); });
 }
 function closeMouse(){ showMiceList(); }
 function addAssayFor(table, aid){
@@ -1429,6 +1458,8 @@ function saveAll(){
   });
   var tv=getMultiSelect(document.getElementById('mouseTumourSite'));
   mrec.tumour_site = tv.length? tv.join(', ') : null;
+  var tvf=getMultiSelect(document.getElementById('mouseFixedTumourSite'));
+  mrec.tumour_site_fixed = tvf.length? tvf.join(', ') : null;
   if(badDate){ flash('Check the date - use dd/mm/yyyy.','err'); return; }
   if(!mrec.animal_id){ flash('Enter an Animal ID first.','err'); return; }
 
@@ -1472,6 +1503,7 @@ function saveAll(){
 function clearAll(){
   resetForm('mouseForm');
   ['ogttForm','ogttForm2','plasmaForm','flowForm','ihcForm'].forEach(function(fid){ resetForm(fid); });
+  updateAges();
   showSeg('ogtt');
 }
 
