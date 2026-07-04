@@ -94,6 +94,21 @@
   .msel-opt{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;cursor:pointer}
   .msel-opt:hover{background:#f5f3ff}
   .msel-opt input{width:auto;margin:0}
+  .segbar{display:flex;gap:4px;background:#f1edfb;border-radius:10px;padding:4px;margin-bottom:16px;flex-wrap:wrap}
+  .segbtn{flex:1;min-width:110px;background:none;border:none;padding:9px 12px;border-radius:8px;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer}
+  .segbtn.active{background:#fff;color:var(--accent);box-shadow:0 1px 2px rgba(15,23,42,.12)}
+  .segsub{font-size:15px;font-weight:700;margin:4px 0 12px}
+  .segsub2{margin-top:24px;border-top:1px solid var(--line);padding-top:18px}
+  .locked{background:#f3f0fb;cursor:not-allowed;color:var(--ink)}
+  select.locked{pointer-events:none}
+  .iconbtn{background:#fff;border:1px solid var(--line);border-radius:8px;width:30px;height:30px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;padding:0;color:var(--ink)}
+  .iconbtn:hover{background:#f5f3ff;border-color:var(--accent);color:var(--accent)}
+  .iconbtn.del:hover{background:#fee2e2;border-color:#dc2626;color:#dc2626}
+  .iconbtn svg{width:15px;height:15px}
+  th.sortable{cursor:pointer;user-select:none}
+  th.sortable:hover{color:var(--accent)}
+  td.miceact,th.miceact{text-align:right;white-space:nowrap}
+  td.miceact .row-actions{justify-content:flex-end;margin-top:0}
   .hide{display:none!important}
 </style>
 </head>
@@ -165,7 +180,7 @@
     <section id="tab-dashboard" class="tabpage active">
       <div class="card">
         <h2>Study progress</h2>
-        <p class="hint">Target: 9 mice per group per timepoint (108 total). "Completed" = a mouse with at least one record logged for that group &amp; timepoint.</p>
+        <p class="hint">Target: 9 mice per group per timepoint (81 total). Counts registered mice by group &amp; study timepoint (Day 40, DP 0, DP+4).</p>
         <div id="progOverall" style="margin-bottom:16px"></div>
         <div class="proggrid" id="progGrid"></div>
       </div>
@@ -187,47 +202,60 @@
 
     <!-- ===== MICE ===== -->
     <section id="tab-mice" class="tabpage">
-      <div id="miceListWrap">
+      <div id="miceList">
         <div class="card">
-          <h2 id="mouseFormTitle">Register / edit mouse</h2>
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:6px">
+            <h2 style="margin:0">Registered mice</h2>
+            <button class="btn" type="button" onclick="showAddMouse()">+ Add a mouse</button>
+          </div>
+          <p class="hint">Open a mouse to view or edit its data. Click "Add a mouse" to register a new one.</p>
+          <div class="toolbar">
+            <div class="field"><label>Search Animal ID</label><input id="miceSearch" oninput="renderMice()" placeholder="Type to filter..."></div>
+            <div class="field"><label>Filter group</label><select id="miceGroupFilter" onchange="renderMice()"></select></div>
+            <div class="field"><label>Filter timepoint</label><select id="miceTimepointFilter" onchange="renderMice()"></select></div>
+          </div>
+          <div class="tablewrap"><table id="miceTable"></table></div>
+        </div>
+      </div>
+      <div id="miceEntry" class="hide">
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+            <h2 id="mouseFormTitle" style="margin:0">Register / edit mouse</h2>
+            <button class="btn ghost sm" type="button" onclick="showMiceList()">Back to list</button>
+          </div>
           <p class="hint">Add a mouse once, then open it to fill in its OGTT, plasma, flow &amp; IHC data. The group set here is inherited by new records for this mouse.</p>
           <form id="mouseForm">
             <input type="hidden" name="id">
             <div class="grid g4">
               <div><label>Animal ID *</label><input name="animal_id" required list="animalList"></div>
               <div><label>Group</label><select name="grp" data-groups></select></div>
+              <div><label>Timepoint</label><select name="timepoint" data-study-tps></select></div>
               <div><label>Site(s) of tumour</label><div id="mouseTumourSite" data-name="tumour_site"></div></div>
-              <div><label>Date of palpable tumour</label><input name="palpable_date" type="text" class="datein" placeholder="dd/mm/yyyy" inputmode="numeric" maxlength="10"></div>
             </div>
             <div class="grid g4" style="margin-top:12px">
+              <div><label>Date of palpable tumour</label><input name="palpable_date" type="text" class="datein" placeholder="dd/mm/yyyy" inputmode="numeric" maxlength="10"></div>
               <div><label>Date of birth</label><input name="dob" type="text" class="datein" placeholder="dd/mm/yyyy" inputmode="numeric" maxlength="10"></div>
-              <div style="grid-column:span 3"><label>Notes</label><input name="notes" placeholder="e.g. humane endpoint, comments"></div>
+              <div style="grid-column:span 2"><label>Notes</label><input name="notes" placeholder="e.g. humane endpoint, comments"></div>
             </div>
-            <div class="row-actions"><button class="btn" type="submit">Save mouse</button>
-              <button class="btn ghost" type="button" onclick="resetForm('mouseForm')">Clear</button></div>
         </form>
         </div>
         <div class="card">
-          <h2>Registered mice</h2>
-          <p class="hint">Open a mouse to view and add all its assay data in one place.</p>
-          <div class="tablewrap"><table id="miceTable"></table></div>
-        </div>
-      </div>
-      <div id="mouseProfile" class="hide"></div>
-    </section>
-
-    <!-- ===== OGTT ===== -->
-    <section id="tab-ogtt" class="tabpage">
-      <div class="card">
-        <h2>Add / edit OGTT record</h2>
-        <p class="hint">Glucose tolerance test - run at Day 40 (baseline) and ~3 days pre-termination.</p>
-        <form id="ogttForm">
+          <h2>Enter assay data (optional)</h2>
+          <p class="hint">Add data now while registering a mouse, or later by opening one. Type the Animal ID (or save the mouse first) and the group auto-fills. All assays are optional and can be completed anytime.</p>
+          <div class="segbar">
+            <button type="button" class="segbtn active" data-seg="ogtt" onclick="showSeg('ogtt')">OGTT</button>
+            <button type="button" class="segbtn" data-seg="plasma" onclick="showSeg('plasma')">Plasma &amp; Cytokines</button>
+            <button type="button" class="segbtn" data-seg="flow" onclick="showSeg('flow')">Flow Cytometry</button>
+            <button type="button" class="segbtn" data-seg="ihc" onclick="showSeg('ihc')">IHC</button>
+          </div>
+          <div class="segpage" id="seg-ogtt"><h3 class="segsub">Baseline OGTT</h3>
+          <form id="ogttForm">
           <input type="hidden" name="id">
           <div class="grid g4">
             <div><label>Animal ID *</label><input name="animal_id" required list="animalList"></div>
-            <div><label>Date</label><input name="test_date" type="text" class="datein" placeholder="dd/mm/yyyy" inputmode="numeric" maxlength="10"></div>
             <div><label>Group</label><select name="grp" data-groups></select></div>
             <div><label>Timepoint</label><select name="timepoint" data-tps></select></div>
+            <div><label>Date</label><input name="test_date" type="text" class="datein" placeholder="dd/mm/yyyy" inputmode="numeric" maxlength="10"></div>
           </div>
           <div class="grid g4" style="margin-top:12px">
             <div><label>Body weight (g)</label><input name="body_weight" type="number" step="any"></div>
@@ -243,37 +271,33 @@
             <div><label>120</label><input name="bg_120" type="number" step="any"></div>
           </div></div>
           <div style="margin-top:12px"><label>Notes</label><input name="notes"></div>
-          <div class="row-actions"><button class="btn" type="submit">Save record</button>
-            <button class="btn ghost" type="button" onclick="resetForm('ogttForm')">Clear</button></div>
         </form>
-      </div>
-      <div class="card">
-        <h2>Glucose tolerance curves</h2>
-        <div class="toolbar">
-          <div class="field"><label>Timepoint</label><select id="ogttTp"></select></div>
-        </div>
-        <div class="chartbox"><canvas id="ogttCurve"></canvas></div>
-        <div class="legendrow"><span class="lg-wt">WT-CD</span><span class="lg-cd">TB-CD</span><span class="lg-hfd">TB-HFD</span></div>
-      </div>
-      <div class="card">
-        <h2>Glucose AUC &amp; body weight (mean of group)</h2>
-        <div class="grid g2">
-          <div class="chartbox"><canvas id="ogttAuc"></canvas></div>
-          <div class="chartbox"><canvas id="bwChart"></canvas></div>
-        </div>
-      </div>
-      <div class="card">
-        <h2>OGTT records</h2>
-        <div class="tablewrap"><table id="ogttTable"></table></div>
-      </div>
-    </section>
-
-    <!-- ===== PLASMA ===== -->
-    <section id="tab-plasma" class="tabpage">
-      <div class="card">
-        <h2>Add / edit plasma record</h2>
-        <p class="hint">Adipokines/hormones and cytokines. Leave blank any analyte not measured for this sample.</p>
-        <form id="plasmaForm">
+          <h3 class="segsub segsub2">Endpoint OGTT</h3>
+          <form id="ogttForm2">
+          <input type="hidden" name="id">
+          <div class="grid g4">
+            <div><label>Animal ID *</label><input name="animal_id" required list="animalList"></div>
+            <div><label>Group</label><select name="grp" data-groups></select></div>
+            <div><label>Timepoint</label><select name="timepoint" data-tps></select></div>
+            <div><label>Date</label><input name="test_date" type="text" class="datein" placeholder="dd/mm/yyyy" inputmode="numeric" maxlength="10"></div>
+          </div>
+          <div class="grid g4" style="margin-top:12px">
+            <div><label>Body weight (g)</label><input name="body_weight" type="number" step="any"></div>
+            <div><label>Glucose dose administered</label><input name="glucose_vol" type="number" step="any"></div>
+          </div>
+          <div style="margin-top:14px"><label>Blood glucose at each time point (min)</label>
+          <div class="grid g6">
+            <div><label>0</label><input name="bg_0" type="number" step="any"></div>
+            <div><label>15</label><input name="bg_15" type="number" step="any"></div>
+            <div><label>30</label><input name="bg_30" type="number" step="any"></div>
+            <div><label>60</label><input name="bg_60" type="number" step="any"></div>
+            <div><label>90</label><input name="bg_90" type="number" step="any"></div>
+            <div><label>120</label><input name="bg_120" type="number" step="any"></div>
+          </div></div>
+          <div style="margin-top:12px"><label>Notes</label><input name="notes"></div>
+        </form>
+          </div>
+          <div class="segpage hide" id="seg-plasma"><form id="plasmaForm">
           <input type="hidden" name="id">
           <div class="grid g4">
             <div><label>Animal ID *</label><input name="animal_id" required list="animalList"></div>
@@ -298,10 +322,70 @@
             <div><label>IL-10</label><input name="il_10" type="number" step="any"></div>
           </div></div>
           <div style="margin-top:12px"><label>Notes</label><input name="notes"></div>
-          <div class="row-actions"><button class="btn" type="submit">Save record</button>
-            <button class="btn ghost" type="button" onclick="resetForm('plasmaForm')">Clear</button></div>
-        </form>
+        </form></div>
+          <div class="segpage hide" id="seg-flow"><form id="flowForm">
+          <input type="hidden" name="id">
+          <div class="grid g4">
+            <div><label>Animal ID *</label><input name="animal_id" required list="animalList"></div>
+            <div><label>Date</label><input name="test_date" type="text" class="datein" placeholder="dd/mm/yyyy" inputmode="numeric" maxlength="10"></div>
+            <div><label>Group</label><select name="grp" data-groups></select></div>
+            <div><label>Timepoint</label><select name="timepoint" data-tps></select></div>
+          </div>
+          <div class="grid g4" style="margin-top:12px">
+            <div><label>Tissue</label><input name="tissue" list="tissueList" placeholder="Tumor"></div>
+            <div><label>Population</label><input name="population" list="popList" placeholder="CD8+ T cells"></div>
+            <div><label>Value</label><input name="value" type="number" step="any"></div>
+            <div><label>Unit</label><input name="unit" list="flowUnitList" placeholder="% of CD45+"></div>
+          </div>
+          <div style="margin-top:12px"><label>Notes</label><input name="notes"></div>
+        </form></div>
+          <div class="segpage hide" id="seg-ihc"><form id="ihcForm">
+          <input type="hidden" name="id">
+          <div class="grid g4">
+            <div><label>Animal ID *</label><input name="animal_id" required list="animalList"></div>
+            <div><label>Date</label><input name="test_date" type="text" class="datein" placeholder="dd/mm/yyyy" inputmode="numeric" maxlength="10"></div>
+            <div><label>Group</label><select name="grp" data-groups></select></div>
+            <div><label>Timepoint</label><select name="timepoint" data-tps></select></div>
+          </div>
+          <div class="grid g4" style="margin-top:12px">
+            <div><label>Marker</label><input name="marker" list="markerList" placeholder="Ki67"></div>
+            <div><label>Value</label><input name="value" type="number" step="any"></div>
+            <div><label>Unit</label><input name="unit" list="ihcUnitList" placeholder="% positive area"></div>
+            <div><label>Region</label><input name="region" list="regionList" placeholder="Tumor core"></div>
+          </div>
+          <div style="margin-top:12px"><label>Notes</label><input name="notes"></div>
+        </form></div>
+          <div class="row-actions" style="margin-top:18px;border-top:1px solid var(--line);padding-top:16px"><button class="btn" type="button" onclick="saveAll()">Save mouse &amp; data</button> <button class="btn ghost" type="button" onclick="clearAll()">Clear all</button></div>
+        </div>
       </div>
+      <div id="mouseProfile" class="hide"></div>
+    </section>
+
+    <!-- ===== OGTT ===== -->
+    <section id="tab-ogtt" class="tabpage">
+      <div class="card">
+        <h2>Glucose tolerance curves</h2>
+        <div class="toolbar">
+          <div class="field"><label>Timepoint</label><select id="ogttTp"></select></div>
+        </div>
+        <div class="chartbox"><canvas id="ogttCurve"></canvas></div>
+        <div class="legendrow"><span class="lg-wt">WT-CD</span><span class="lg-cd">TB-CD</span><span class="lg-hfd">TB-HFD</span></div>
+      </div>
+      <div class="card">
+        <h2>Glucose AUC &amp; body weight (mean of group)</h2>
+        <div class="grid g2">
+          <div class="chartbox"><canvas id="ogttAuc"></canvas></div>
+          <div class="chartbox"><canvas id="bwChart"></canvas></div>
+        </div>
+      </div>
+      <div class="card">
+        <h2>OGTT records</h2>
+        <div class="tablewrap"><table id="ogttTable"></table></div>
+      </div>
+    </section>
+
+    <!-- ===== PLASMA ===== -->
+    <section id="tab-plasma" class="tabpage">
       <div class="card">
         <h2>Analyte comparison</h2>
         <div class="toolbar">
@@ -319,28 +403,6 @@
     <!-- ===== FLOW ===== -->
     <section id="tab-flow" class="tabpage">
       <div class="card">
-        <h2>Add / edit flow cytometry record</h2>
-        <p class="hint">One row per population per tissue per animal.</p>
-        <form id="flowForm">
-          <input type="hidden" name="id">
-          <div class="grid g4">
-            <div><label>Animal ID *</label><input name="animal_id" required list="animalList"></div>
-            <div><label>Date</label><input name="test_date" type="text" class="datein" placeholder="dd/mm/yyyy" inputmode="numeric" maxlength="10"></div>
-            <div><label>Group</label><select name="grp" data-groups></select></div>
-            <div><label>Timepoint</label><select name="timepoint" data-tps></select></div>
-          </div>
-          <div class="grid g4" style="margin-top:12px">
-            <div><label>Tissue</label><input name="tissue" list="tissueList" placeholder="Tumor"></div>
-            <div><label>Population</label><input name="population" list="popList" placeholder="CD8+ T cells"></div>
-            <div><label>Value</label><input name="value" type="number" step="any"></div>
-            <div><label>Unit</label><input name="unit" list="flowUnitList" placeholder="% of CD45+"></div>
-          </div>
-          <div style="margin-top:12px"><label>Notes</label><input name="notes"></div>
-          <div class="row-actions"><button class="btn" type="submit">Save record</button>
-            <button class="btn ghost" type="button" onclick="resetForm('flowForm')">Clear</button></div>
-        </form>
-      </div>
-      <div class="card">
         <h2>Population comparison</h2>
         <div class="toolbar">
           <div class="field"><label>Population</label><select id="flowPop"></select></div>
@@ -357,28 +419,6 @@
 
     <!-- ===== IHC ===== -->
     <section id="tab-ihc" class="tabpage">
-      <div class="card">
-        <h2>Add / edit IHC record</h2>
-        <p class="hint">One row per marker quantification on tumor tissue.</p>
-        <form id="ihcForm">
-          <input type="hidden" name="id">
-          <div class="grid g4">
-            <div><label>Animal ID *</label><input name="animal_id" required list="animalList"></div>
-            <div><label>Date</label><input name="test_date" type="text" class="datein" placeholder="dd/mm/yyyy" inputmode="numeric" maxlength="10"></div>
-            <div><label>Group</label><select name="grp" data-groups></select></div>
-            <div><label>Timepoint</label><select name="timepoint" data-tps></select></div>
-          </div>
-          <div class="grid g4" style="margin-top:12px">
-            <div><label>Marker</label><input name="marker" list="markerList" placeholder="Ki67"></div>
-            <div><label>Value</label><input name="value" type="number" step="any"></div>
-            <div><label>Unit</label><input name="unit" list="ihcUnitList" placeholder="% positive area"></div>
-            <div><label>Region</label><input name="region" list="regionList" placeholder="Tumor core"></div>
-          </div>
-          <div style="margin-top:12px"><label>Notes</label><input name="notes"></div>
-          <div class="row-actions"><button class="btn" type="submit">Save record</button>
-            <button class="btn ghost" type="button" onclick="resetForm('ihcForm')">Clear</button></div>
-        </form>
-      </div>
       <div class="card">
         <h2>Marker comparison (group mean)</h2>
         <div class="toolbar">
@@ -463,9 +503,10 @@ var GROUPS = [
   {code:'TB-CD',  label:'Tumor-bearing (control diet)',   color:'#f59e0b'},
   {code:'TB-HFD', label:'Tumor-bearing (high-fat diet)',     color:'#dc2626'}
 ];
-var TIMEPOINTS = ['Baseline','Day 40','DP 0','DP+4'];
+var TIMEPOINTS = ['Baseline','Endpoint'];
+var STUDY_TIMEPOINTS = ['Day 40','DP 0','DP+4'];
 var TARGET_PER_CELL = 9;
-var ANIMAL_COLS = ['animal_id','grp','tumour_site','palpable_date','dob','notes'];
+var ANIMAL_COLS = ['animal_id','grp','timepoint','tumour_site','palpable_date','dob','notes'];
 var SEX_OPTS = ['','Male','Female'];
 var STATUS_OPTS = ['Active','Terminated'];
 var OGTT_TIMES = [0,15,30,60,90,120];
@@ -507,28 +548,34 @@ function init(){
     sel.innerHTML = '<option value="">(add later)</option>' + GROUPS.map(function(g){return '<option value="'+g.code+'">'+g.label+'</option>';}).join('');
   });
   document.querySelectorAll('select[data-tps]').forEach(function(sel){
-    sel.innerHTML = '<option value="">(add later)</option>' + TIMEPOINTS.map(function(t){return '<option>'+t+'</option>';}).join('');
+    sel.innerHTML = TIMEPOINTS.map(function(t){return '<option>'+t+'</option>';}).join('');
   });
+  document.querySelectorAll('select[data-study-tps]').forEach(function(sel){
+    sel.innerHTML = '<option value="">Select...</option>' + STUDY_TIMEPOINTS.map(function(t){return '<option>'+t+'</option>';}).join('');
+  });
+  var _bf=document.getElementById('ogttForm'); if(_bf&&_bf.elements['timepoint']) _bf.elements['timepoint'].value='Baseline';
+  var _df=document.getElementById('ogttForm2'); if(_df&&_df.elements['timepoint']) _df.elements['timepoint'].value='Endpoint';
   document.getElementById('tpList').innerHTML = TIMEPOINTS.map(function(t){return '<option>'+t+'</option>';}).join('');
   document.getElementById('ogttTp').innerHTML = TIMEPOINTS.map(function(t){return '<option>'+t+'</option>';}).join('');
   document.getElementById('analyteKey').innerHTML = ANALYTES.map(function(a){return '<option value="'+a.key+'">'+a.label+'</option>';}).join('');
 
   document.getElementById('tabbar').addEventListener('click', function(e){
     var b=e.target.closest('button[data-tab]'); if(!b) return;
-    document.querySelectorAll('nav.tabs button').forEach(function(x){x.classList.toggle('active',x===b);});
-    document.querySelectorAll('.tabpage').forEach(function(p){p.classList.remove('active');});
-    document.getElementById('tab-'+b.dataset.tab).classList.add('active');
-    renderCharts();
+    activateTab(b.dataset.tab);
+    if(b.dataset.tab==='mice') showMiceList();
   });
 
   bindForm('ogttForm','ogtt');
+  bindForm('ogttForm2','ogtt');
   bindForm('plasmaForm','plasma');
   bindForm('flowForm','flow_cytometry');
   bindForm('ihcForm','ihc');
   fillMouseSelects();
   bindMouseForm();
+  wireMouseContext();
   wireGroupInheritance();
   wireDateInputs();
+  lockAssayContextFields();
 
   ['ogttTp','analyteKey','flowPop','flowTissue','ihcMarker'].forEach(function(id){
     var el=document.getElementById(id);
@@ -720,16 +767,23 @@ function isNumericCol(table,col){
 }
 
 function resetForm(formId){ var f=document.getElementById(formId); f.reset(); if(f.elements['id']) f.elements['id'].value='';
-  var ms=f.querySelectorAll('.msel'); for(var i=0;i<ms.length;i++){ setMultiSelect(ms[i], []); } }
+  var ms=f.querySelectorAll('.msel'); for(var i=0;i<ms.length;i++){ setMultiSelect(ms[i], []); }
+  if(formId==='ogttForm' && f.elements['timepoint']) f.elements['timepoint'].value='Baseline';
+  if(formId==='ogttForm2' && f.elements['timepoint']) f.elements['timepoint'].value='Endpoint'; }
 
 function editRow(table, id){
   var rec=cache[table].filter(function(r){return r.id===id;})[0]; if(!rec) return;
   var formId={ogtt:'ogttForm',plasma:'plasmaForm',flow_cytometry:'flowForm',ihc:'ihcForm'}[table];
+  if(table==='ogtt' && rec.timepoint==='Endpoint') formId='ogttForm2';
+  clearAll();
+  var m=animalsForId(rec.animal_id);
+  if(m){ loadMouseIntoForm(m); }
+  else { var mf0=document.getElementById('mouseForm'); if(mf0.elements['animal_id']) mf0.elements['animal_id'].value=rec.animal_id||''; if(mf0.elements['grp']) mf0.elements['grp'].value=rec.grp||''; prefillAssayForms(rec.animal_id, rec.grp); }
   var form=document.getElementById(formId);
   form.elements['id'].value=rec.id;
   COLS[table].forEach(function(col){ if(form.elements[col]) form.elements[col].value = DATE_COLS[col]? isoToDMY(rec[col]) : (rec[col]==null?'':rec[col]); });
-  var tab={ogtt:'ogtt',plasma:'plasma',flow_cytometry:'flow',ihc:'ihc'}[table];
-  document.querySelector('nav.tabs button[data-tab="'+tab+'"]').click();
+  var seg={ogtt:'ogtt',plasma:'plasma',flow_cytometry:'flow',ihc:'ihc'}[table];
+  activateTab('mice'); showMiceEntry(); showSeg(seg);
   form.scrollIntoView({behavior:'smooth'});
 }
 
@@ -750,23 +804,7 @@ function renderTables(){
   buildTable('flowTable','flow_cytometry');
   buildTable('ihcTable','ihc');
 }
-function buildTable(tid, table){
-  var el=document.getElementById(tid); var cols=COLS[table]; var rows=cache[table];
-  if(!rows.length){ el.innerHTML='<tbody><tr><td class="muted">No records yet.</td></tr></tbody>'; return; }
-  var head='<thead><tr>'+cols.map(function(c){return '<th>'+c.replace(/_/g,' ')+'</th>';}).join('')+'<th></th></tr></thead>';
-  var body='<tbody>'+rows.map(function(r){
-    var cells=cols.map(function(c){
-      if(c==='grp') return '<td><span class="pill '+(r.grp||'')+'">'+(r.grp||'')+'</span></td>';
-      var _dv = DATE_COLS[c] ? isoToDMY(r[c]) : (r[c]==null?'':(''+r[c]));
-      return '<td>'+escapeHtml(_dv)+'</td>';
-    }).join('');
-    return '<tr>'+cells+'<td><div class="row-actions">'+
-      '<button class="btn ghost sm" onclick="editRow(\''+table+'\',\''+r.id+'\')">Edit</button>'+
-      '<button class="btn danger sm" onclick="deleteRow(\''+table+'\',\''+r.id+'\')">Del</button>'+
-      '</div></td></tr>';
-  }).join('')+'</tbody>';
-  el.innerHTML=head+body;
-}
+function buildTable(tid, table){ document.getElementById(tid).innerHTML=tableHtml(table, cache[table], true); }
 
 /* ============================================================
    DYNAMIC SELECTORS
@@ -941,15 +979,11 @@ function renderStats(){
   ];
   document.getElementById('statGrid').innerHTML=cards.map(function(c){return '<div class="stat"><div class="n">'+c.n+'</div><div class="l">'+c.l+'</div></div>';}).join('');
 
-  var head='<thead><tr><th>Group</th>'+TIMEPOINTS.map(function(t){return '<th>'+t+'</th>';}).join('')+'</tr></thead>';
+  var head='<thead><tr><th>Group</th>'+STUDY_TIMEPOINTS.map(function(t){return '<th>'+t+'</th>';}).join('')+'</tr></thead>';
   var body='<tbody>'+GROUPS.map(function(g){
-    var tds=TIMEPOINTS.map(function(tp){
-      var a={};
-      ['ogtt','plasma','flow_cytometry','ihc'].forEach(function(t){
-        cache[t].filter(function(r){return r.grp===g.code&&r.timepoint===tp;}).forEach(function(r){ if(r.animal_id) a[r.animal_id]=1; });
-      });
-      var c=Object.keys(a).length;
-      return '<td>'+(c? c+' animal(s)' : '<span class="muted">-</span>')+'</td>';
+    var tds=STUDY_TIMEPOINTS.map(function(tp){
+      var c=animalsCache.filter(function(m){return m.grp===g.code&&m.timepoint===tp;}).length;
+      return '<td>'+(c? c+' mouse/mice' : '<span class="muted">-</span>')+'</td>';
     }).join('');
     return '<tr><td><span class="pill '+g.code+'">'+g.code+'</span></td>'+tds+'</tr>';
   }).join('')+'</tbody>';
@@ -961,17 +995,13 @@ function renderStats(){
    STUDY PROGRESS
 ============================================================ */
 function completedCount(grp,tp){
-  var a={};
-  ['ogtt','plasma','flow_cytometry','ihc'].forEach(function(t){
-    cache[t].filter(function(r){return r.grp===grp && r.timepoint===tp;}).forEach(function(r){ if(r.animal_id) a[r.animal_id]=1; });
-  });
-  return Object.keys(a).length;
+  return animalsCache.filter(function(m){ return m.grp===grp && m.timepoint===tp; }).length;
 }
 function renderProgress(){
-  var totalTarget = TARGET_PER_CELL * GROUPS.length * TIMEPOINTS.length;
+  var totalTarget = TARGET_PER_CELL * GROUPS.length * STUDY_TIMEPOINTS.length;
   var doneTotal=0, cells='';
   GROUPS.forEach(function(g){
-    TIMEPOINTS.forEach(function(tp){
+    STUDY_TIMEPOINTS.forEach(function(tp){
       var done=Math.min(completedCount(g.code,tp), TARGET_PER_CELL);
       doneTotal+=done;
       var due=TARGET_PER_CELL-done;
@@ -985,7 +1015,7 @@ function renderProgress(){
   });
   var pctAll=totalTarget?Math.round(doneTotal/totalTarget*100):0;
   document.getElementById('progOverall').innerHTML=
-    '<div class="overallnum"><span><b>'+doneTotal+'</b> of '+totalTarget+' mice completed</span><span>'+pctAll+'%</span></div>'+
+    '<div class="overallnum"><span><b>'+doneTotal+'</b> of '+totalTarget+' mice registered</span><span>'+pctAll+'%</span></div>'+
     '<div class="progwrap" style="height:16px"><div class="progbar" style="width:'+pctAll+'%"></div></div>';
   document.getElementById('progGrid').innerHTML=cells;
 }
@@ -998,20 +1028,20 @@ function groupLabel(code){ for(var i=0;i<GROUPS.length;i++){ if(GROUPS[i].code==
 function jsstr(s){ return (''+s).replace(/\\/g,'\\\\').replace(/'/g,"\\'"); }
 function recordCount(aid){ var n=0; ['ogtt','plasma','flow_cytometry','ihc'].forEach(function(t){ n+=cache[t].filter(function(r){return r.animal_id===aid;}).length; }); return n; }
 
-function tableHtml(table, rows){
+function tableHtml(table, rows, readonly){
   var cols=COLS[table];
   if(!rows.length){ return '<tbody><tr><td class="muted">No records yet.</td></tr></tbody>'; }
-  var head='<thead><tr>'+cols.map(function(c){return '<th>'+c.replace(/_/g,' ')+'</th>';}).join('')+'<th></th></tr></thead>';
+  var head='<thead><tr>'+cols.map(function(c){return '<th>'+c.replace(/_/g,' ')+'</th>';}).join('')+(readonly?'':'<th></th>')+'</tr></thead>';
   var body='<tbody>'+rows.map(function(r){
     var cells=cols.map(function(c){
       if(c==='grp') return '<td><span class="pill '+(r.grp||'')+'">'+(r.grp||'')+'</span></td>';
       var _dv = DATE_COLS[c] ? isoToDMY(r[c]) : (r[c]==null?'':(''+r[c]));
       return '<td>'+escapeHtml(_dv)+'</td>';
     }).join('');
-    return '<tr>'+cells+'<td><div class="row-actions">'+
+    return '<tr>'+cells+(readonly?'':'<td><div class="row-actions">'+
       '<button class="btn ghost sm" onclick="editRow(\''+table+'\',\''+r.id+'\')">Edit</button>'+
       '<button class="btn danger sm" onclick="deleteRow(\''+table+'\',\''+r.id+'\')">Del</button>'+
-      '</div></td></tr>';
+      '</div></td>')+'</tr>';
   }).join('')+'</tbody>';
   return head+body;
 }
@@ -1026,25 +1056,10 @@ function fillMouseSelects(){
 }
 function bindMouseForm(){
   var form=document.getElementById('mouseForm');
-  form.addEventListener('submit', function(e){
-    e.preventDefault();
-    var fd=new FormData(form); var rec={}; var badDate=false;
-    ANIMAL_COLS.forEach(function(c){ var v=fd.get(c); if(v===null) return; v=(''+v).trim();
-      if(DATE_COLS[c]){ if(v===''){ rec[c]=null; } else { var iso=dmyToIso(v); if(iso===undefined){ badDate=true; } else { rec[c]=iso; } } return; }
-      rec[c]= v===''?null:v; });
-    if(badDate){ flash('Check the date - use dd/mm/yyyy.','err'); return; }
-    var tv=getMultiSelect(document.getElementById('mouseTumourSite'));
-    rec.tumour_site = tv.length? tv.join(', ') : null;
-    var id=fd.get('id');
-    var p=id ? sb.from('animals').update(rec).eq('id',id) : sb.from('animals').insert([rec]);
-    p.then(function(res){
-      if(res.error){ flash('Save failed: '+res.error.message,'err'); return; }
-      flash('Mouse saved.','ok'); resetForm('mouseForm'); loadAll();
-    });
-  });
+  form.addEventListener('submit', function(e){ e.preventDefault(); saveAll(); });
 }
 function wireGroupInheritance(){
-  ['ogttForm','plasmaForm','flowForm','ihcForm'].forEach(function(fid){
+  ['ogttForm','ogttForm2','plasmaForm','flowForm','ihcForm'].forEach(function(fid){
     var f=document.getElementById(fid); var ai=f.elements['animal_id'];
     ai.addEventListener('change', function(){
       var m=animalsForId(ai.value.trim());
@@ -1052,34 +1067,83 @@ function wireGroupInheritance(){
     });
   });
 }
+var IC_EYE='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+var IC_PEN='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>';
+var IC_TRASH='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>';
+var miceSort={key:'animal_id',dir:1};
+function sortMice(key){
+  if(miceSort.key===key){ miceSort.dir=-miceSort.dir; } else { miceSort.key=key; miceSort.dir=1; }
+  renderMice();
+}
+function miceHead(){
+  var cols=[['animal_id','Animal ID'],['grp','Group'],['timepoint','Timepoint'],['tumour_site','Tumour site'],['palpable_date','Palpable date'],['dob','DOB'],['records','Records']];
+  var h='<thead><tr>';
+  for(var i=0;i<cols.length;i++){
+    var key=cols[i][0], lbl=cols[i][1];
+    var ar = miceSort.key===key ? (miceSort.dir>0?' &#9650;':' &#9660;') : '';
+    h+='<th class="sortable" onclick="sortMice(\''+key+'\')">'+lbl+ar+'</th>';
+  }
+  return h+'<th class="miceact"></th></tr></thead>';
+}
+function miceSortVal(m,k){
+  if(k==='records') return recordCount(m.animal_id);
+  return m[k];
+}
 function renderMice(){
   var dl=document.getElementById('animalList');
   if(dl) dl.innerHTML=animalsCache.map(function(m){return '<option value="'+escapeHtml(m.animal_id)+'">';}).join('');
-  var el=document.getElementById('miceTable');
-  if(!animalsCache.length){ el.innerHTML='<tbody><tr><td class="muted">No mice registered yet. Add one above.</td></tr></tbody>'; return; }
-  var head='<thead><tr><th>Animal ID</th><th>Group</th><th>Tumour site</th><th>Palpable date</th><th>DOB</th><th>Records</th><th></th></tr></thead>';
-  var body='<tbody>'+animalsCache.map(function(m){
+  var el=document.getElementById('miceTable'); if(!el) return;
+  var gfsel=document.getElementById('miceGroupFilter');
+  if(gfsel && gfsel.options.length===0){ gfsel.innerHTML='<option value="">All groups</option>'+GROUPS.map(function(g){return '<option value="'+g.code+'">'+g.code+'</option>';}).join(''); }
+  var tfsel=document.getElementById('miceTimepointFilter');
+  if(tfsel && tfsel.options.length===0){ tfsel.innerHTML='<option value="">All timepoints</option>'+STUDY_TIMEPOINTS.map(function(t){return '<option>'+t+'</option>';}).join(''); }
+
+  if(!animalsCache.length){ el.innerHTML='<tbody><tr><td class="muted">No mice registered yet. Click "+ Add a mouse".</td></tr></tbody>'; return; }
+
+  var q=(document.getElementById('miceSearch')?document.getElementById('miceSearch').value:'').trim().toLowerCase();
+  var gf=gfsel?gfsel.value:'';
+  var tf=tfsel?tfsel.value:'';
+  var rows=animalsCache.filter(function(m){
+    if(q && (''+(m.animal_id||'')).toLowerCase().indexOf(q)<0) return false;
+    if(gf && m.grp!==gf) return false;
+    if(tf && m.timepoint!==tf) return false;
+    return true;
+  });
+  var k=miceSort.key, dir=miceSort.dir;
+  rows=rows.slice().sort(function(a,b){
+    var va=miceSortVal(a,k), vb=miceSortVal(b,k);
+    if(va==null) va=''; if(vb==null) vb='';
+    var na=parseFloat(va), nb=parseFloat(vb);
+    if(!isNaN(na)&&!isNaN(nb)&&(''+na===''+va)&&(''+nb===''+vb)) return (na-nb)*dir;
+    if(typeof va==='number'&&typeof vb==='number') return (va-vb)*dir;
+    va=(''+va).toLowerCase(); vb=(''+vb).toLowerCase();
+    return va<vb?-1*dir:(va>vb?1*dir:0);
+  });
+
+  if(!rows.length){ el.innerHTML=miceHead()+'<tbody><tr><td class="muted" colspan="8">No mice match your filter.</td></tr></tbody>'; return; }
+
+  var body='<tbody>'+rows.map(function(m){
     return '<tr><td><b>'+escapeHtml(m.animal_id)+'</b></td>'+
       '<td>'+(m.grp?'<span class="pill '+m.grp+'">'+m.grp+'</span>':'<span class="muted">-</span>')+'</td>'+
+      '<td>'+escapeHtml(m.timepoint||'')+'</td>'+
       '<td>'+escapeHtml(m.tumour_site||'')+'</td><td>'+escapeHtml(isoToDMY(m.palpable_date))+'</td><td>'+escapeHtml(isoToDMY(m.dob))+'</td>'+
       '<td>'+recordCount(m.animal_id)+'</td>'+
-      '<td><div class="row-actions">'+
-        '<button class="btn sm" onclick="openMouse(\''+jsstr(m.animal_id)+'\')">Open</button>'+
-        '<button class="btn ghost sm" onclick="editMouse(\''+m.id+'\')">Edit</button>'+
-        '<button class="btn danger sm" onclick="deleteMouse(\''+m.id+'\')">Del</button>'+
+      '<td class="miceact"><div class="row-actions">'+
+        '<button class="iconbtn" title="Open" onclick="openMouse(\''+jsstr(m.animal_id)+'\')">'+IC_EYE+'</button>'+
+        '<button class="iconbtn" title="Edit" onclick="editMouse(\''+m.id+'\')">'+IC_PEN+'</button>'+
+        '<button class="iconbtn del" title="Delete" onclick="deleteMouse(\''+m.id+'\')">'+IC_TRASH+'</button>'+
       '</div></td></tr>';
   }).join('')+'</tbody>';
-  el.innerHTML=head+body;
+  el.innerHTML=miceHead()+body;
 }
+
 function editMouse(id){
   var m=null; for(var i=0;i<animalsCache.length;i++){ if(animalsCache[i].id===id) m=animalsCache[i]; }
   if(!m) return;
-  var form=document.getElementById('mouseForm'); form.elements['id'].value=m.id;
-  ANIMAL_COLS.forEach(function(c){ if(form.elements[c]) form.elements[c].value = DATE_COLS[c]? isoToDMY(m[c]) : (m[c]==null?'':m[c]); });
-  setMultiSelect(document.getElementById('mouseTumourSite'), (m.tumour_site||'').split(/[, ]+/));
-  closeMouse();
-  document.querySelector('nav.tabs button[data-tab="mice"]').click();
-  form.scrollIntoView({behavior:'smooth'});
+  clearAll();
+  loadMouseIntoForm(m);
+  activateTab('mice'); showMiceEntry(); showSeg('ogtt');
+  window.scrollTo({top:0,behavior:'smooth'});
 }
 function deleteMouse(id){
   if(!confirm('Delete this mouse from the registry? Its assay records are NOT deleted (they stay in each section).')) return;
@@ -1110,23 +1174,49 @@ function openMouse(aid){
   });
   var prof=document.getElementById('mouseProfile');
   prof.innerHTML=html; prof.classList.remove('hide');
-  document.getElementById('miceListWrap').classList.add('hide');
+  document.getElementById('miceList').classList.add('hide');
+  document.getElementById('miceEntry').classList.add('hide');
   prof.scrollIntoView({behavior:'smooth'});
 }
-function closeMouse(){
-  currentMouse=null;
-  var prof=document.getElementById('mouseProfile');
-  if(prof){ prof.classList.add('hide'); prof.innerHTML=''; }
-  var lw=document.getElementById('miceListWrap'); if(lw) lw.classList.remove('hide');
+function activateTab(name){
+  var btns=document.querySelectorAll('nav.tabs button');
+  for(var i=0;i<btns.length;i++){ btns[i].classList.toggle('active', btns[i].dataset.tab===name); }
+  var pages=document.querySelectorAll('.tabpage');
+  for(var j=0;j<pages.length;j++){ pages[j].classList.remove('active'); }
+  var pg=document.getElementById('tab-'+name); if(pg) pg.classList.add('active');
+  renderCharts();
 }
+function showMiceList(){
+  currentMouse=null;
+  var prof=document.getElementById('mouseProfile'); if(prof){ prof.classList.add('hide'); prof.innerHTML=''; }
+  var e=document.getElementById('miceEntry'); if(e) e.classList.add('hide');
+  var l=document.getElementById('miceList'); if(l) l.classList.remove('hide');
+}
+function showMiceEntry(){
+  var prof=document.getElementById('mouseProfile'); if(prof) prof.classList.add('hide');
+  var l=document.getElementById('miceList'); if(l) l.classList.add('hide');
+  var e=document.getElementById('miceEntry'); if(e) e.classList.remove('hide');
+}
+function showAddMouse(){
+  clearAll();
+  activateTab('mice'); showMiceEntry(); showSeg('ogtt');
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+function loadMouseIntoForm(m){
+  var form=document.getElementById('mouseForm'); form.elements['id'].value=m.id;
+  ANIMAL_COLS.forEach(function(c){ if(form.elements[c]) form.elements[c].value = DATE_COLS[c]? isoToDMY(m[c]) : (m[c]==null?'':m[c]); });
+  var tmSel=document.getElementById('mouseTumourSite'); if(tmSel) setMultiSelect(tmSel, (m.tumour_site||'').split(/[, ]+/));
+  prefillAssayForms(m.animal_id, m.grp);
+}
+function closeMouse(){ showMiceList(); }
 function addAssayFor(table, aid){
-  var tab={ogtt:'ogtt',plasma:'plasma',flow_cytometry:'flow',ihc:'ihc'}[table];
-  var formId={ogtt:'ogttForm',plasma:'plasmaForm',flow_cytometry:'flowForm',ihc:'ihcForm'}[table];
-  document.querySelector('nav.tabs button[data-tab="'+tab+'"]').click();
-  var f=document.getElementById(formId); f.reset(); f.elements['id'].value='';
-  f.elements['animal_id'].value=aid;
-  var m=animalsForId(aid); if(m && m.grp && f.elements['grp']) f.elements['grp'].value=m.grp;
-  f.scrollIntoView({behavior:'smooth'});
+  var seg={ogtt:'ogtt',plasma:'plasma',flow_cytometry:'flow',ihc:'ihc'}[table];
+  clearAll();
+  var m=animalsForId(aid);
+  if(m){ loadMouseIntoForm(m); }
+  else { var mf0=document.getElementById('mouseForm'); if(mf0.elements['animal_id']) mf0.elements['animal_id'].value=aid||''; prefillAssayForms(aid,''); }
+  activateTab('mice'); showMiceEntry(); showSeg(seg);
+  window.scrollTo({top:0,behavior:'smooth'});
 }
 
 /* ============================================================
@@ -1200,6 +1290,140 @@ function wireDateInputs(){
       this.value=out;
     });
   }
+}
+
+/* ============================================================
+   SEGMENTED ASSAY ENTRY
+============================================================ */
+function showSeg(seg){
+  var segs=['ogtt','plasma','flow','ihc'];
+  for(var i=0;i<segs.length;i++){ var el=document.getElementById('seg-'+segs[i]); if(el) el.classList.toggle('hide', segs[i]!==seg); }
+  var btns=document.querySelectorAll('.segbtn');
+  for(var j=0;j<btns.length;j++){ btns[j].classList.toggle('active', btns[j].getAttribute('data-seg')===seg); }
+}
+function prefillAssayForms(aid, grp){
+  ['ogttForm','ogttForm2','plasmaForm','flowForm','ihcForm'].forEach(function(fid){
+    var f=document.getElementById(fid); if(!f) return;
+    if(f.elements['animal_id']) f.elements['animal_id'].value=aid||'';
+    if(f.elements['grp']) f.elements['grp'].value=grp||'';
+  });
+}
+function wireMouseContext(){
+  var mf=document.getElementById('mouseForm'); if(!mf) return;
+  function sync(){ prefillAssayForms((mf.elements['animal_id'].value||'').trim(), mf.elements['grp']?mf.elements['grp'].value:''); }
+  if(mf.elements['animal_id']) mf.elements['animal_id'].addEventListener('input', sync);
+  if(mf.elements['grp']) mf.elements['grp'].addEventListener('change', sync);
+}
+function lockAssayContextFields(){
+  ['ogttForm','ogttForm2','plasmaForm','flowForm','ihcForm'].forEach(function(fid){
+    var f=document.getElementById(fid); if(!f) return;
+    var ai=f.elements['animal_id'];
+    if(ai){ ai.readOnly=true; ai.classList.add('locked'); ai.removeAttribute('list'); ai.title='Set in the Register mouse form above'; }
+    var g=f.elements['grp'];
+    if(g){ g.classList.add('locked'); g.tabIndex=-1; g.title='Set in the Register mouse form above'; }
+  });
+}
+
+/* ============================================================
+   OGTT COMBINED SAVE (Baseline + Dp+4)
+============================================================ */
+function buildOgttRec(fid){
+  var form=document.getElementById(fid);
+  var fd=new FormData(form); var rec={}; var bad=false;
+  COLS['ogtt'].forEach(function(col){
+    var v=fd.get(col); if(v===null) return; v=(''+v).trim();
+    if(DATE_COLS[col]){ if(v===''){ rec[col]=null; } else { var iso=dmyToIso(v); if(iso===undefined){ bad=true; } else { rec[col]=iso; } } return; }
+    rec[col]= v==='' ? null : (isNumericCol('ogtt',col) ? Number(v) : v);
+  });
+  return { rec:rec, bad:bad, id:fd.get('id') };
+}
+function ogttHasData(rec){
+  return ['body_weight','glucose_vol','bg_0','bg_15','bg_30','bg_60','bg_90','bg_120','notes'].some(function(k){ return rec[k]!=null && rec[k]!==''; });
+}
+function saveOgttBoth(){
+  var a=buildOgttRec('ogttForm'), b=buildOgttRec('ogttForm2');
+  if(a.bad||b.bad){ flash('Check the date - use dd/mm/yyyy.','err'); return; }
+  var jobs=[];
+  [a,b].forEach(function(x){
+    if(!x.rec.animal_id) return;
+    if(x.id){ jobs.push(sb.from('ogtt').update(x.rec).eq('id',x.id)); }
+    else if(ogttHasData(x.rec)){ jobs.push(sb.from('ogtt').insert([x.rec])); }
+  });
+  if(!jobs.length){ flash('Enter OGTT values first.','err'); return; }
+  Promise.all(jobs).then(function(res){
+    var e=res.filter(function(r){return r.error;})[0];
+    if(e){ flash('Save failed: '+e.error.message,'err'); return; }
+    flash('OGTT saved.','ok'); clearOgttBoth(); loadAll();
+  });
+}
+function clearOgttBoth(){
+  resetForm('ogttForm'); resetForm('ogttForm2');
+  var mf=document.getElementById('mouseForm');
+  if(mf) prefillAssayForms((mf.elements['animal_id'].value||'').trim(), mf.elements['grp']?mf.elements['grp'].value:'');
+}
+
+/* ============================================================
+   UNIFIED SAVE (mouse + all filled assays)
+============================================================ */
+function buildAssayRec(fid, table){
+  var form=document.getElementById(fid);
+  var fd=new FormData(form); var rec={}; var bad=false;
+  COLS[table].forEach(function(col){
+    var v=fd.get(col); if(v===null) return; v=(''+v).trim();
+    if(DATE_COLS[col]){ if(v===''){ rec[col]=null; } else { var iso=dmyToIso(v); if(iso===undefined){ bad=true; } else { rec[col]=iso; } } return; }
+    rec[col]= v==='' ? null : (isNumericCol(table,col) ? Number(v) : v);
+  });
+  return { rec:rec, bad:bad, id:fd.get('id') };
+}
+function hasAssayData(table, rec){
+  var ctx={animal_id:1,grp:1,timepoint:1,test_date:1};
+  return COLS[table].some(function(c){ return !ctx[c] && rec[c]!=null && rec[c]!==''; });
+}
+function saveAll(){
+  var mf=document.getElementById('mouseForm');
+  var mfd=new FormData(mf); var mrec={}; var badDate=false;
+  ANIMAL_COLS.forEach(function(c){
+    var v=mfd.get(c); if(v===null) return; v=(''+v).trim();
+    if(DATE_COLS[c]){ if(v===''){ mrec[c]=null; } else { var iso=dmyToIso(v); if(iso===undefined){ badDate=true; } else { mrec[c]=iso; } } return; }
+    mrec[c]= v===''?null:v;
+  });
+  var tv=getMultiSelect(document.getElementById('mouseTumourSite'));
+  mrec.tumour_site = tv.length? tv.join(', ') : null;
+  if(badDate){ flash('Check the date - use dd/mm/yyyy.','err'); return; }
+  if(!mrec.animal_id){ flash('Enter an Animal ID first.','err'); return; }
+
+  var existing=animalsForId(mrec.animal_id);
+  var mid = mf.elements['id'].value || (existing? existing.id : '');
+  var mousePromise = mid ? sb.from('animals').update(mrec).eq('id',mid) : sb.from('animals').insert([mrec]);
+
+  mousePromise.then(function(mres){
+    if(mres.error){ flash('Save failed: '+mres.error.message,'err'); return; }
+    var jobs=[]; var bad=false;
+    ['ogttForm','ogttForm2'].forEach(function(fid){
+      var o=buildOgttRec(fid); if(o.bad){ bad=true; return; }
+      if(!o.rec.animal_id) return;
+      if(o.id){ jobs.push(sb.from('ogtt').update(o.rec).eq('id',o.id)); }
+      else if(ogttHasData(o.rec)){ jobs.push(sb.from('ogtt').insert([o.rec])); }
+    });
+    [['plasmaForm','plasma'],['flowForm','flow_cytometry'],['ihcForm','ihc']].forEach(function(p){
+      var r=buildAssayRec(p[0], p[1]); if(r.bad){ bad=true; return; }
+      if(!r.rec.animal_id) return;
+      if(r.id){ jobs.push(sb.from(p[1]).update(r.rec).eq('id',r.id)); }
+      else if(hasAssayData(p[1], r.rec)){ jobs.push(sb.from(p[1]).insert([r.rec])); }
+    });
+    if(bad){ flash('Check the date - use dd/mm/yyyy.','err'); return; }
+    Promise.all(jobs).then(function(res){
+      var e=res.filter(function(x){return x.error;})[0];
+      if(e){ flash('Mouse saved, but an assay failed: '+e.error.message,'err'); loadAll(); return; }
+      flash('Saved '+mrec.animal_id+' ('+jobs.length+' assay record'+(jobs.length===1?'':'s')+').','ok');
+      clearAll(); showMiceList(); loadAll();
+    });
+  });
+}
+function clearAll(){
+  resetForm('mouseForm');
+  ['ogttForm','ogttForm2','plasmaForm','flowForm','ihcForm'].forEach(function(fid){ resetForm(fid); });
+  showSeg('ogtt');
 }
 
 /* ============================================================
