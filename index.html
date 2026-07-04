@@ -233,9 +233,10 @@
               <div><label>Site(s) of tumour</label><div id="mouseTumourSite" data-name="tumour_site"></div></div>
             </div>
             <div class="grid g4" style="margin-top:12px">
-              <div><label>Date of palpable tumour</label><input name="palpable_date" type="text" class="datein" placeholder="dd/mm/yyyy" inputmode="numeric" maxlength="10"></div>
               <div><label>Date of birth</label><input name="dob" type="text" class="datein" placeholder="dd/mm/yyyy" inputmode="numeric" maxlength="10"></div>
-              <div style="grid-column:span 2"><label>Notes</label><input name="notes" placeholder="e.g. humane endpoint, comments"></div>
+              <div><label>Date of palpable tumour</label><input name="palpable_date" type="text" class="datein" placeholder="dd/mm/yyyy" inputmode="numeric" maxlength="10"></div>
+              <div><label>Date of termination</label><input name="termination_date" type="text" class="datein" placeholder="dd/mm/yyyy" inputmode="numeric" maxlength="10"></div>
+              <div><label>Notes</label><input name="notes" placeholder="e.g. humane endpoint, comments"></div>
             </div>
         </form>
         </div>
@@ -506,7 +507,7 @@ var GROUPS = [
 var TIMEPOINTS = ['Baseline','Endpoint'];
 var STUDY_TIMEPOINTS = ['Day 40','DP 0','DP+4'];
 var TARGET_PER_CELL = 9;
-var ANIMAL_COLS = ['animal_id','grp','timepoint','tumour_site','palpable_date','dob','notes'];
+var ANIMAL_COLS = ['animal_id','grp','timepoint','tumour_site','dob','palpable_date','termination_date','notes'];
 var SEX_OPTS = ['','Male','Female'];
 var STATUS_OPTS = ['Active','Terminated'];
 var OGTT_TIMES = [0,15,30,60,90,120];
@@ -1031,10 +1032,10 @@ function recordCount(aid){ var n=0; ['ogtt','plasma','flow_cytometry','ihc'].for
 function tableHtml(table, rows, readonly){
   var cols=COLS[table];
   if(!rows.length){ return '<tbody><tr><td class="muted">No records yet.</td></tr></tbody>'; }
-  var head='<thead><tr>'+cols.map(function(c){return '<th>'+c.replace(/_/g,' ')+'</th>';}).join('')+(readonly?'':'<th></th>')+'</tr></thead>';
+  var head='<thead><tr>'+cols.map(function(c){return '<th>'+(c==='grp'?'Group':c.replace(/_/g,' '))+'</th>';}).join('')+(readonly?'':'<th></th>')+'</tr></thead>';
   var body='<tbody>'+rows.map(function(r){
     var cells=cols.map(function(c){
-      if(c==='grp') return '<td><span class="pill '+(r.grp||'')+'">'+(r.grp||'')+'</span></td>';
+      if(c==='grp'){ var _g=r.grp; var _m=animalsForId(r.animal_id); if((!_g) && _m) _g=_m.grp; _g=_g||''; return '<td>'+(_g?'<span class="pill '+_g+'">'+_g+'</span>':'<span class="muted">-</span>')+'</td>'; }
       var _dv = DATE_COLS[c] ? isoToDMY(r[c]) : (r[c]==null?'':(''+r[c]));
       return '<td>'+escapeHtml(_dv)+'</td>';
     }).join('');
@@ -1146,10 +1147,15 @@ function editMouse(id){
   window.scrollTo({top:0,behavior:'smooth'});
 }
 function deleteMouse(id){
-  if(!confirm('Delete this mouse from the registry? Its assay records are NOT deleted (they stay in each section).')) return;
-  sb.from('animals').delete().eq('id',id).then(function(res){
-    if(res.error){ flash('Delete failed: '+res.error.message,'err'); return; }
-    flash('Mouse deleted.','ok'); closeMouse(); loadAll();
+  var m=null; for(var i=0;i<animalsCache.length;i++){ if(animalsCache[i].id===id) m=animalsCache[i]; }
+  var aid = m ? m.animal_id : null;
+  if(!confirm('Delete this mouse AND all of its OGTT / plasma / flow / IHC records? This cannot be undone.')) return;
+  var jobs=[ sb.from('animals').delete().eq('id',id) ];
+  if(aid){ ['ogtt','plasma','flow_cytometry','ihc'].forEach(function(t){ jobs.push(sb.from(t).delete().eq('animal_id',aid)); }); }
+  Promise.all(jobs).then(function(res){
+    var e=res.filter(function(x){return x.error;})[0];
+    if(e){ flash('Delete failed: '+e.error.message,'err'); return; }
+    flash('Mouse and its records deleted.','ok'); showMiceList(); loadAll();
   });
 }
 function openMouse(aid){
@@ -1261,7 +1267,7 @@ document.addEventListener('click', function(){
 /* ============================================================
    DATE FORMAT  (dd/mm/yyyy on screen; ISO yyyy-mm-dd in database)
 ============================================================ */
-var DATE_COLS = { test_date:1, dob:1, palpable_date:1 };
+var DATE_COLS = { test_date:1, dob:1, palpable_date:1, termination_date:1 };
 function isoToDMY(v){
   if(v==null||v==='') return '';
   var m=(''+v).match(/^(\d{4})-(\d{2})-(\d{2})/);
@@ -1394,27 +1400,32 @@ function saveAll(){
 
   var existing=animalsForId(mrec.animal_id);
   var mid = mf.elements['id'].value || (existing? existing.id : '');
-  var mousePromise = mid ? sb.from('animals').update(mrec).eq('id',mid) : sb.from('animals').insert([mrec]);
+  var mousePromise = mid ? sb.from('animals').update(mrec).eq('id',mid).select() : sb.from('animals').insert([mrec]).select();
 
   mousePromise.then(function(mres){
     if(mres.error){ flash('Save failed: '+mres.error.message,'err'); return; }
+    if(mid && (!mres.data || mres.data.length===0)){
+      flash('Update did not apply - this mouse looks like it was created under a different login, so it cannot be edited. See notes.','err'); loadAll(); return;
+    }
     var jobs=[]; var bad=false;
     ['ogttForm','ogttForm2'].forEach(function(fid){
       var o=buildOgttRec(fid); if(o.bad){ bad=true; return; }
       if(!o.rec.animal_id) return;
-      if(o.id){ jobs.push(sb.from('ogtt').update(o.rec).eq('id',o.id)); }
-      else if(ogttHasData(o.rec)){ jobs.push(sb.from('ogtt').insert([o.rec])); }
+      if(o.id){ jobs.push(sb.from('ogtt').update(o.rec).eq('id',o.id).select()); }
+      else if(ogttHasData(o.rec)){ jobs.push(sb.from('ogtt').insert([o.rec]).select()); }
     });
     [['plasmaForm','plasma'],['flowForm','flow_cytometry'],['ihcForm','ihc']].forEach(function(p){
       var r=buildAssayRec(p[0], p[1]); if(r.bad){ bad=true; return; }
       if(!r.rec.animal_id) return;
-      if(r.id){ jobs.push(sb.from(p[1]).update(r.rec).eq('id',r.id)); }
-      else if(hasAssayData(p[1], r.rec)){ jobs.push(sb.from(p[1]).insert([r.rec])); }
+      if(r.id){ jobs.push(sb.from(p[1]).update(r.rec).eq('id',r.id).select()); }
+      else if(hasAssayData(p[1], r.rec)){ jobs.push(sb.from(p[1]).insert([r.rec]).select()); }
     });
     if(bad){ flash('Check the date - use dd/mm/yyyy.','err'); return; }
     Promise.all(jobs).then(function(res){
       var e=res.filter(function(x){return x.error;})[0];
       if(e){ flash('Mouse saved, but an assay failed: '+e.error.message,'err'); loadAll(); return; }
+      var noop=res.filter(function(x){ return x.data && x.data.length===0; }).length;
+      if(noop){ flash('Some record changes did not apply (they may be owned by a different login). See notes.','err'); clearAll(); showMiceList(); loadAll(); return; }
       flash('Saved '+mrec.animal_id+' ('+jobs.length+' assay record'+(jobs.length===1?'':'s')+').','ok');
       clearAll(); showMiceList(); loadAll();
     });
