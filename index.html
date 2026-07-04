@@ -1,0 +1,924 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Obesity x Breast Cancer - Research Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --bg:#f4f6fb; --card:#ffffff; --ink:#1e293b; --muted:#64748b;
+    --line:#e2e8f0; --accent:#4f46e5; --accent2:#0ea5e9;
+    --wt:#2563eb; --tbcd:#f59e0b; --tbhfd:#dc2626;
+    --ok:#16a34a; --warn:#d97706; --err:#dc2626;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+       background:var(--bg);color:var(--ink);font-size:14px}
+  header.top{background:linear-gradient(100deg,#4f46e5,#0ea5e9);color:#fff;padding:14px 20px;
+       display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}
+  header.top h1{font-size:16px;margin:0;font-weight:600}
+  header.top .sub{font-size:12px;opacity:.85;font-weight:400}
+  .userbox{font-size:12px;display:flex;align-items:center;gap:10px}
+  .userbox button{background:rgba(255,255,255,.18);color:#fff;border:1px solid rgba(255,255,255,.4)}
+  nav.tabs{display:flex;gap:2px;background:#fff;border-bottom:1px solid var(--line);padding:0 12px;flex-wrap:wrap}
+  nav.tabs button{background:none;border:none;padding:12px 16px;font-size:13px;color:var(--muted);
+       border-bottom:3px solid transparent;cursor:pointer;font-weight:500}
+  nav.tabs button.active{color:var(--accent);border-bottom-color:var(--accent)}
+  main{padding:20px;max-width:1150px;margin:0 auto}
+  .tabpage{display:none}
+  .tabpage.active{display:block}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px;margin-bottom:18px;
+        box-shadow:0 1px 2px rgba(15,23,42,.04)}
+  .card h2{font-size:15px;margin:0 0 4px}
+  .card p.hint{color:var(--muted);font-size:12px;margin:0 0 14px}
+  label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px;font-weight:500}
+  input,select,button,textarea{font-family:inherit;font-size:13px}
+  input,select,textarea{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink)}
+  input:focus,select:focus,textarea:focus{outline:2px solid #c7d2fe;border-color:var(--accent)}
+  .grid{display:grid;gap:12px}
+  .g2{grid-template-columns:repeat(2,1fr)} .g3{grid-template-columns:repeat(3,1fr)}
+  .g4{grid-template-columns:repeat(4,1fr)} .g6{grid-template-columns:repeat(6,1fr)}
+  @media(max-width:760px){.g2,.g3,.g4,.g6{grid-template-columns:1fr 1fr}}
+  .btn{background:var(--accent);color:#fff;border:none;border-radius:8px;padding:9px 16px;cursor:pointer;font-weight:600}
+  .btn:hover{filter:brightness(1.05)}
+  .btn.sec{background:#eef2ff;color:var(--accent)}
+  .btn.ghost{background:#fff;border:1px solid var(--line);color:var(--ink)}
+  .btn.sm{padding:5px 10px;font-size:12px;border-radius:6px}
+  .btn.danger{background:#fee2e2;color:#b91c1c}
+  .row-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+  table{width:100%;border-collapse:collapse;font-size:12px}
+  th,td{text-align:left;padding:7px 9px;border-bottom:1px solid var(--line);white-space:nowrap}
+  th{color:var(--muted);font-weight:600;position:sticky;top:0;background:#fff}
+  .tablewrap{overflow:auto;max-height:360px;border:1px solid var(--line);border-radius:10px}
+  .pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600;color:#fff}
+  .pill.WT-CD{background:var(--wt)} .pill.TB-CD{background:var(--tbcd)} .pill.TB-HFD{background:var(--tbhfd)}
+  .toolbar{display:flex;gap:10px;align-items:end;flex-wrap:wrap;margin-bottom:14px}
+  .toolbar .field{min-width:160px}
+  canvas{max-width:100%}
+  .chartbox{position:relative;height:340px}
+  .statgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+  .stat{background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:12px}
+  .stat .n{font-size:22px;font-weight:700}
+  .stat .l{font-size:11px;color:var(--muted)}
+  .banner{padding:11px 14px;border-radius:9px;font-size:13px;margin-bottom:14px}
+  .banner.err{background:#fef2f2;color:#b91c1c;border:1px solid #fecaca}
+  .banner.ok{background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0}
+  .banner.info{background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe}
+  .centerwrap{max-width:440px;margin:8vh auto;padding:0 16px}
+  .legendrow{display:flex;gap:16px;flex-wrap:wrap;margin:8px 0 0;font-size:12px;color:var(--muted)}
+  .legendrow span::before{content:"";display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:middle}
+  .lg-wt::before{background:var(--wt)} .lg-cd::before{background:var(--tbcd)} .lg-hfd::before{background:var(--tbhfd)}
+  code{background:#f1f5f9;padding:1px 5px;border-radius:4px;font-size:12px}
+  .muted{color:var(--muted)}
+  .hide{display:none!important}
+</style>
+</head>
+<body>
+
+<!-- ===================== CONNECT SCREEN ===================== -->
+<div id="connectScreen" class="centerwrap hide">
+  <div class="card">
+    <h2>Connect your database</h2>
+    <p class="hint">Paste the two values from your Supabase project (Settings then API). They're stored only in this browser.</p>
+    <div id="connectErr" class="banner err hide"></div>
+    <div id="libStatus" class="muted" style="font-size:12px;margin-bottom:8px"></div>
+    <label>Project URL</label>
+    <input id="cfgUrl" placeholder="https://xxxxxxxx.supabase.co">
+    <div style="height:10px"></div>
+    <label>Anon public key</label>
+    <input id="cfgKey" placeholder="eyJhbGci... (the 'anon public' key)">
+    <div style="height:14px"></div>
+    <button class="btn" onclick="saveConfig()">Connect</button>
+  </div>
+</div>
+
+<!-- ===================== LOGIN SCREEN ===================== -->
+<div id="loginScreen" class="centerwrap hide">
+  <div class="card">
+    <h2 id="authTitle">Sign in</h2>
+    <p class="hint">Use the account you created for this database.</p>
+    <div id="authMsg" class="banner err hide"></div>
+    <label>Email</label>
+    <input id="authEmail" type="email" autocomplete="username">
+    <div style="height:10px"></div>
+    <label>Password</label>
+    <input id="authPass" type="password" autocomplete="current-password">
+    <div style="height:14px"></div>
+    <button class="btn" id="authBtn" onclick="doAuth()">Sign in</button>
+    <button class="btn ghost" onclick="toggleAuthMode()">Need an account? Sign up</button>
+    <div style="height:8px"></div>
+    <button class="btn ghost sm" onclick="forgetConfig()">Change database connection</button>
+  </div>
+</div>
+
+<!-- ===================== APP ===================== -->
+<div id="app" class="hide">
+  <header class="top">
+    <div>
+      <h1>Obesity x Breast Cancer - Research Dashboard</h1>
+      <div class="sub">Inflammatory &amp; immune profiling across cancer progression - transgenic murine model</div>
+    </div>
+    <div class="userbox">
+      <span id="whoami"></span>
+      <button class="btn sm" onclick="signOut()">Sign out</button>
+    </div>
+  </header>
+
+  <nav class="tabs" id="tabbar">
+    <button data-tab="dashboard" class="active">Overview</button>
+    <button data-tab="ogtt">OGTT</button>
+    <button data-tab="plasma">Plasma &amp; Cytokines</button>
+    <button data-tab="flow">Flow Cytometry</button>
+    <button data-tab="ihc">IHC</button>
+    <button data-tab="data">Export / Import</button>
+  </nav>
+
+  <main>
+    <div id="globalMsg" class="banner ok hide"></div>
+
+    <!-- ===== OVERVIEW ===== -->
+    <section id="tab-dashboard" class="tabpage active">
+      <div class="card">
+        <h2>Study snapshot</h2>
+        <p class="hint">Live counts from your database. Groups: WT (controlled diet), TB (controlled diet), TB (high-fat diet).</p>
+        <div class="statgrid" id="statGrid"></div>
+      </div>
+      <div class="card">
+        <h2>Records collected by group &amp; assay</h2>
+        <div class="chartbox"><canvas id="overviewChart"></canvas></div>
+      </div>
+      <div class="card">
+        <h2>Data completeness</h2>
+        <p class="hint">Rows present for each group at each timepoint - spot gaps before termination days.</p>
+        <div class="tablewrap"><table id="completeTable"></table></div>
+      </div>
+    </section>
+
+    <!-- ===== OGTT ===== -->
+    <section id="tab-ogtt" class="tabpage">
+      <div class="card">
+        <h2>Add / edit OGTT record</h2>
+        <p class="hint">Glucose tolerance test - run at Day 40 (baseline) and ~3 days pre-termination.</p>
+        <form id="ogttForm">
+          <input type="hidden" name="id">
+          <div class="grid g4">
+            <div><label>Animal ID *</label><input name="animal_id" required></div>
+            <div><label>Date</label><input name="test_date" type="date"></div>
+            <div><label>Group</label><select name="grp" data-groups></select></div>
+            <div><label>Timepoint</label><input name="timepoint" list="tpList" placeholder="Day 40"></div>
+          </div>
+          <div class="grid g4" style="margin-top:12px">
+            <div><label>Body weight (g)</label><input name="body_weight" type="number" step="any"></div>
+            <div><label>Glucose dose administered</label><input name="glucose_vol" type="number" step="any"></div>
+          </div>
+          <div style="margin-top:14px"><label>Blood glucose at each time point (min)</label>
+          <div class="grid g6">
+            <div><label>0</label><input name="bg_0" type="number" step="any"></div>
+            <div><label>15</label><input name="bg_15" type="number" step="any"></div>
+            <div><label>30</label><input name="bg_30" type="number" step="any"></div>
+            <div><label>60</label><input name="bg_60" type="number" step="any"></div>
+            <div><label>90</label><input name="bg_90" type="number" step="any"></div>
+            <div><label>120</label><input name="bg_120" type="number" step="any"></div>
+          </div></div>
+          <div style="margin-top:12px"><label>Notes</label><input name="notes"></div>
+          <div class="row-actions"><button class="btn" type="submit">Save record</button>
+            <button class="btn ghost" type="button" onclick="resetForm('ogttForm')">Clear</button></div>
+        </form>
+      </div>
+      <div class="card">
+        <h2>Glucose tolerance curves</h2>
+        <div class="toolbar">
+          <div class="field"><label>Timepoint</label><select id="ogttTp"></select></div>
+        </div>
+        <div class="chartbox"><canvas id="ogttCurve"></canvas></div>
+        <div class="legendrow"><span class="lg-wt">WT-CD</span><span class="lg-cd">TB-CD</span><span class="lg-hfd">TB-HFD</span></div>
+      </div>
+      <div class="card">
+        <h2>Glucose AUC &amp; body weight (mean of group)</h2>
+        <div class="grid g2">
+          <div class="chartbox"><canvas id="ogttAuc"></canvas></div>
+          <div class="chartbox"><canvas id="bwChart"></canvas></div>
+        </div>
+      </div>
+      <div class="card">
+        <h2>OGTT records</h2>
+        <div class="tablewrap"><table id="ogttTable"></table></div>
+      </div>
+    </section>
+
+    <!-- ===== PLASMA ===== -->
+    <section id="tab-plasma" class="tabpage">
+      <div class="card">
+        <h2>Add / edit plasma record</h2>
+        <p class="hint">Adipokines/hormones and cytokines. Leave blank any analyte not measured for this sample.</p>
+        <form id="plasmaForm">
+          <input type="hidden" name="id">
+          <div class="grid g4">
+            <div><label>Animal ID *</label><input name="animal_id" required></div>
+            <div><label>Date</label><input name="test_date" type="date"></div>
+            <div><label>Group</label><select name="grp" data-groups></select></div>
+            <div><label>Timepoint</label><input name="timepoint" list="tpList"></div>
+          </div>
+          <div style="margin-top:14px"><label>Adipokines / hormones</label>
+          <div class="grid g4">
+            <div><label>Leptin</label><input name="leptin" type="number" step="any"></div>
+            <div><label>Adiponectin</label><input name="adiponectin" type="number" step="any"></div>
+            <div><label>Insulin</label><input name="insulin" type="number" step="any"></div>
+            <div><label>Resistin</label><input name="resistin" type="number" step="any"></div>
+          </div></div>
+          <div style="margin-top:14px"><label>Cytokines</label>
+          <div class="grid g6">
+            <div><label>TNF-alpha</label><input name="tnf_alpha" type="number" step="any"></div>
+            <div><label>IL-1beta</label><input name="il_1beta" type="number" step="any"></div>
+            <div><label>IL-6</label><input name="il_6" type="number" step="any"></div>
+            <div><label>IL-17</label><input name="il_17" type="number" step="any"></div>
+            <div><label>IL-18</label><input name="il_18" type="number" step="any"></div>
+            <div><label>IL-10</label><input name="il_10" type="number" step="any"></div>
+          </div></div>
+          <div style="margin-top:12px"><label>Notes</label><input name="notes"></div>
+          <div class="row-actions"><button class="btn" type="submit">Save record</button>
+            <button class="btn ghost" type="button" onclick="resetForm('plasmaForm')">Clear</button></div>
+        </form>
+      </div>
+      <div class="card">
+        <h2>Analyte comparison</h2>
+        <div class="toolbar">
+          <div class="field"><label>Analyte</label><select id="analyteKey"></select></div>
+        </div>
+        <div class="chartbox"><canvas id="analyteChart"></canvas></div>
+        <div class="legendrow"><span class="lg-wt">WT-CD</span><span class="lg-cd">TB-CD</span><span class="lg-hfd">TB-HFD</span></div>
+      </div>
+      <div class="card">
+        <h2>Plasma records</h2>
+        <div class="tablewrap"><table id="plasmaTable"></table></div>
+      </div>
+    </section>
+
+    <!-- ===== FLOW ===== -->
+    <section id="tab-flow" class="tabpage">
+      <div class="card">
+        <h2>Add / edit flow cytometry record</h2>
+        <p class="hint">One row per population per tissue per animal.</p>
+        <form id="flowForm">
+          <input type="hidden" name="id">
+          <div class="grid g4">
+            <div><label>Animal ID *</label><input name="animal_id" required></div>
+            <div><label>Date</label><input name="test_date" type="date"></div>
+            <div><label>Group</label><select name="grp" data-groups></select></div>
+            <div><label>Timepoint</label><input name="timepoint" list="tpList"></div>
+          </div>
+          <div class="grid g4" style="margin-top:12px">
+            <div><label>Tissue</label><input name="tissue" list="tissueList" placeholder="Tumor"></div>
+            <div><label>Population</label><input name="population" list="popList" placeholder="CD8+ T cells"></div>
+            <div><label>Value</label><input name="value" type="number" step="any"></div>
+            <div><label>Unit</label><input name="unit" list="flowUnitList" placeholder="% of CD45+"></div>
+          </div>
+          <div style="margin-top:12px"><label>Notes</label><input name="notes"></div>
+          <div class="row-actions"><button class="btn" type="submit">Save record</button>
+            <button class="btn ghost" type="button" onclick="resetForm('flowForm')">Clear</button></div>
+        </form>
+      </div>
+      <div class="card">
+        <h2>Population comparison</h2>
+        <div class="toolbar">
+          <div class="field"><label>Population</label><select id="flowPop"></select></div>
+          <div class="field"><label>Tissue</label><select id="flowTissue"></select></div>
+        </div>
+        <div class="chartbox"><canvas id="flowChart"></canvas></div>
+        <div class="legendrow"><span class="lg-wt">WT-CD</span><span class="lg-cd">TB-CD</span><span class="lg-hfd">TB-HFD</span></div>
+      </div>
+      <div class="card">
+        <h2>Flow cytometry records</h2>
+        <div class="tablewrap"><table id="flowTable"></table></div>
+      </div>
+    </section>
+
+    <!-- ===== IHC ===== -->
+    <section id="tab-ihc" class="tabpage">
+      <div class="card">
+        <h2>Add / edit IHC record</h2>
+        <p class="hint">One row per marker quantification on tumor tissue.</p>
+        <form id="ihcForm">
+          <input type="hidden" name="id">
+          <div class="grid g4">
+            <div><label>Animal ID *</label><input name="animal_id" required></div>
+            <div><label>Date</label><input name="test_date" type="date"></div>
+            <div><label>Group</label><select name="grp" data-groups></select></div>
+            <div><label>Timepoint</label><input name="timepoint" list="tpList"></div>
+          </div>
+          <div class="grid g4" style="margin-top:12px">
+            <div><label>Marker</label><input name="marker" list="markerList" placeholder="Ki67"></div>
+            <div><label>Value</label><input name="value" type="number" step="any"></div>
+            <div><label>Unit</label><input name="unit" list="ihcUnitList" placeholder="% positive area"></div>
+            <div><label>Region</label><input name="region" list="regionList" placeholder="Tumor core"></div>
+          </div>
+          <div style="margin-top:12px"><label>Notes</label><input name="notes"></div>
+          <div class="row-actions"><button class="btn" type="submit">Save record</button>
+            <button class="btn ghost" type="button" onclick="resetForm('ihcForm')">Clear</button></div>
+        </form>
+      </div>
+      <div class="card">
+        <h2>Marker comparison (group mean)</h2>
+        <div class="toolbar">
+          <div class="field"><label>Marker</label><select id="ihcMarker"></select></div>
+        </div>
+        <div class="chartbox"><canvas id="ihcChart"></canvas></div>
+      </div>
+      <div class="card">
+        <h2>IHC records</h2>
+        <div class="tablewrap"><table id="ihcTable"></table></div>
+      </div>
+    </section>
+
+    <!-- ===== DATA ===== -->
+    <section id="tab-data" class="tabpage">
+      <div class="card">
+        <h2>Export</h2>
+        <p class="hint">Download for backup or for stats in GraphPad Prism / R. CSV is one file per assay; JSON is a full backup of everything.</p>
+        <div class="row-actions">
+          <button class="btn sec" onclick="exportCsv('ogtt')">OGTT CSV</button>
+          <button class="btn sec" onclick="exportCsv('plasma')">Plasma CSV</button>
+          <button class="btn sec" onclick="exportCsv('flow_cytometry')">Flow CSV</button>
+          <button class="btn sec" onclick="exportCsv('ihc')">IHC CSV</button>
+          <button class="btn" onclick="exportJson()">Full JSON backup</button>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Import JSON backup</h2>
+        <p class="hint">Restore rows from a JSON backup file (adds them as new records under your account).</p>
+        <input type="file" id="importFile" accept="application/json">
+        <div class="row-actions"><button class="btn ghost" onclick="importJson()">Import file</button></div>
+        <div id="importMsg" class="muted" style="margin-top:8px"></div>
+      </div>
+      <div class="card">
+        <h2>Connection</h2>
+        <p class="hint">Database: <code id="dbUrlShow"></code></p>
+        <div class="row-actions"><button class="btn ghost sm" onclick="forgetConfig()">Disconnect / change database</button></div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- datalists (suggestions; you can type new values too) -->
+<datalist id="tpList"></datalist>
+<datalist id="tissueList">
+  <option>Tumor</option><option>Spleen</option><option>Blood</option>
+  <option>Adipose (gonadal)</option><option>Adipose (mammary)</option>
+  <option>Draining lymph node</option><option>Bone marrow</option>
+</datalist>
+<datalist id="popList">
+  <option>CD45+ leucocytes</option><option>CD3+ T cells</option><option>CD4+ T cells</option>
+  <option>CD8+ T cells</option><option>Tregs (CD4+FoxP3+)</option><option>CD19+ B cells</option>
+  <option>NK cells (NK1.1+)</option><option>Neutrophils (Ly6G+)</option><option>Monocytes (Ly6C+)</option>
+  <option>Macrophages (F4/80+)</option><option>M1 macrophages</option><option>M2 macrophages</option>
+  <option>MDSC (CD11b+Gr-1+)</option><option>Dendritic cells</option>
+</datalist>
+<datalist id="flowUnitList">
+  <option>% of CD45+</option><option>% of parent</option><option>% of live</option>
+  <option>cells/mg tissue</option><option>absolute count</option>
+</datalist>
+<datalist id="markerList">
+  <option>Ki67</option><option>CD31</option><option>F4/80</option><option>CD8</option>
+  <option>CD4</option><option>FoxP3</option><option>Cleaved-Caspase-3</option>
+  <option>aSMA</option><option>PCNA</option><option>CD68</option>
+</datalist>
+<datalist id="ihcUnitList">
+  <option>% positive area</option><option>positive cells/field</option>
+  <option>H-score</option><option>cells/mm2</option>
+</datalist>
+<datalist id="regionList">
+  <option>Tumor core</option><option>Invasive margin</option>
+  <option>Whole section</option><option>Peritumoral</option>
+</datalist>
+
+<script>
+/* ============================================================
+   CONFIG
+============================================================ */
+var GROUPS = [
+  {code:'WT-CD',  label:'WT (controlled diet)',              color:'#2563eb'},
+  {code:'TB-CD',  label:'Tumor-bearing (controlled diet)',   color:'#f59e0b'},
+  {code:'TB-HFD', label:'Tumor-bearing (high-fat diet)',     color:'#dc2626'}
+];
+var TIMEPOINTS = ['Day 40','DP 0','DP+4'];
+var OGTT_TIMES = [0,15,30,60,90,120];
+var OGTT_KEYS  = ['bg_0','bg_15','bg_30','bg_60','bg_90','bg_120'];
+var ANALYTES = [
+  {key:'leptin',label:'Leptin'},{key:'adiponectin',label:'Adiponectin'},
+  {key:'insulin',label:'Insulin'},{key:'resistin',label:'Resistin'},
+  {key:'tnf_alpha',label:'TNF-alpha'},{key:'il_1beta',label:'IL-1beta'},
+  {key:'il_6',label:'IL-6'},{key:'il_17',label:'IL-17'},
+  {key:'il_18',label:'IL-18'},{key:'il_10',label:'IL-10'}
+];
+var COLS = {
+  ogtt:['animal_id','test_date','grp','timepoint','body_weight','glucose_vol',
+        'bg_0','bg_15','bg_30','bg_60','bg_90','bg_120','notes'],
+  plasma:['animal_id','test_date','grp','timepoint','leptin','adiponectin','insulin','resistin',
+          'tnf_alpha','il_1beta','il_6','il_17','il_18','il_10','notes'],
+  flow_cytometry:['animal_id','test_date','grp','timepoint','tissue','population','value','unit','notes'],
+  ihc:['animal_id','test_date','grp','timepoint','marker','value','unit','region','notes']
+};
+
+/* ============================================================
+   STATE
+============================================================ */
+var sb = null, session = null, authMode = 'signin';
+var cache = {ogtt:[], plasma:[], flow_cytometry:[], ihc:[]};
+var charts = {};
+var libsPromise = Promise.resolve();
+var libsLoading = false;
+
+/* ============================================================
+   BOOT
+============================================================ */
+document.addEventListener('DOMContentLoaded', init);
+
+function init(){
+  document.querySelectorAll('select[data-groups]').forEach(function(sel){
+    sel.innerHTML = GROUPS.map(function(g){return '<option value="'+g.code+'">'+g.label+'</option>';}).join('');
+  });
+  document.getElementById('tpList').innerHTML = TIMEPOINTS.map(function(t){return '<option>'+t+'</option>';}).join('');
+  document.getElementById('ogttTp').innerHTML = TIMEPOINTS.map(function(t){return '<option>'+t+'</option>';}).join('');
+  document.getElementById('analyteKey').innerHTML = ANALYTES.map(function(a){return '<option value="'+a.key+'">'+a.label+'</option>';}).join('');
+
+  document.getElementById('tabbar').addEventListener('click', function(e){
+    var b=e.target.closest('button[data-tab]'); if(!b) return;
+    document.querySelectorAll('nav.tabs button').forEach(function(x){x.classList.toggle('active',x===b);});
+    document.querySelectorAll('.tabpage').forEach(function(p){p.classList.remove('active');});
+    document.getElementById('tab-'+b.dataset.tab).classList.add('active');
+    renderCharts();
+  });
+
+  bindForm('ogttForm','ogtt');
+  bindForm('plasmaForm','plasma');
+  bindForm('flowForm','flow_cytometry');
+  bindForm('ihcForm','ihc');
+
+  ['ogttTp','analyteKey','flowPop','flowTissue','ihcMarker'].forEach(function(id){
+    var el=document.getElementById(id);
+    if(el) el.addEventListener('change',renderCharts);
+  });
+
+  loadLibs();
+
+  var url=localStorage.getItem('sb_url'), key=localStorage.getItem('sb_key');
+  if(url && key){ libsPromise.then(function(){ startClient(url,key); }); }
+  else { show('connectScreen'); }
+}
+
+/* ============================================================
+   ROBUST LIBRARY LOADER (multi-CDN fallback)
+============================================================ */
+function ensureLib(globalName, urls){
+  return new Promise(function(resolve,reject){
+    if(window[globalName]) return resolve();
+    var i=0;
+    function attempt(){
+      if(i>=urls.length) return reject(new Error(globalName+' failed'));
+      var s=document.createElement('script');
+      s.src=urls[i++];
+      s.onload=function(){ window[globalName] ? resolve() : attempt(); };
+      s.onerror=attempt;
+      document.head.appendChild(s);
+    }
+    attempt();
+  });
+}
+function loadLibs(){
+  if(libsLoading) return libsPromise;
+  libsLoading=true;
+  var st=document.getElementById('libStatus');
+  function set(t){ if(st) st.textContent=t; }
+  set('Loading database library...');
+  var sbUrls=[
+    'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2',
+    'https://unpkg.com/@supabase/supabase-js@2',
+    'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js'
+  ];
+  var chUrls=[
+    'https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js',
+    'https://unpkg.com/chart.js@4.4.1/dist/chart.umd.min.js',
+    'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js'
+  ];
+  libsPromise = Promise.allSettled([ensureLib('supabase',sbUrls), ensureLib('Chart',chUrls)])
+    .then(function(){
+      libsLoading=false;
+      if(window.supabase) set('');
+      else set('Could not load the database library from any CDN - your network is likely blocking it. See the note above.');
+    });
+  return libsPromise;
+}
+
+/* ============================================================
+   CONNECTION + AUTH
+============================================================ */
+function show(which){
+  ['connectScreen','loginScreen','app'].forEach(function(id){
+    document.getElementById(id).classList.toggle('hide', id!==which);
+  });
+}
+
+function saveConfig(){
+  var url=document.getElementById('cfgUrl').value.trim().replace(/\/$/,'');
+  var key=document.getElementById('cfgKey').value.trim();
+  var err=document.getElementById('connectErr');
+  if(!/^https:\/\/.+\.supabase\.co$/.test(url)){ err.textContent='That does not look like a Supabase project URL (https://xxxx.supabase.co).'; err.classList.remove('hide'); return; }
+  if(key.length<20){ err.textContent='That anon key looks too short - copy the full "anon public" key.'; err.classList.remove('hide'); return; }
+  localStorage.setItem('sb_url',url); localStorage.setItem('sb_key',key);
+  libsPromise.then(function(){ startClient(url,key); });
+}
+
+function forgetConfig(){
+  if(!confirm('Disconnect this browser from the database? Your data stays safe in Supabase; you just re-enter the URL/key to reconnect.')) return;
+  localStorage.removeItem('sb_url'); localStorage.removeItem('sb_key');
+  location.reload();
+}
+
+function startClient(url,key){
+  var err=document.getElementById('connectErr');
+  if(typeof supabase==='undefined' || !supabase.createClient){
+    err.innerHTML='The database library has not loaded - this is a network/firewall or ad-blocker issue, <b>not</b> your URL or key. '+
+      'Try: reconnect to the internet, disable any ad/tracker blocker for this page, or use a different network (some university/hospital Wi-Fi blocks these CDNs). Then click Connect again.';
+    err.classList.remove('hide'); show('connectScreen'); loadLibs(); return;
+  }
+  try{
+    sb = supabase.createClient(url,key);
+  }catch(e){
+    err.textContent='Could not initialise the client: '+e.message;
+    err.classList.remove('hide'); show('connectScreen'); return;
+  }
+  var dbShow=document.getElementById('dbUrlShow'); if(dbShow) dbShow.textContent=url;
+  sb.auth.getSession().then(function(res){
+    session=res.data.session;
+    if(session){ enterApp(); } else { show('loginScreen'); }
+  }).catch(function(){ show('loginScreen'); });
+  sb.auth.onAuthStateChange(function(_e,s){ session=s; });
+}
+
+function toggleAuthMode(){
+  authMode = authMode==='signin' ? 'signup' : 'signin';
+  document.getElementById('authTitle').textContent = authMode==='signin'?'Sign in':'Create account';
+  document.getElementById('authBtn').textContent   = authMode==='signin'?'Sign in':'Sign up';
+}
+
+function doAuth(){
+  var email=document.getElementById('authEmail').value.trim();
+  var password=document.getElementById('authPass').value;
+  var msg=document.getElementById('authMsg'); msg.className='banner err hide';
+  if(!email||!password){ msg.textContent='Enter email and password.'; msg.className='banner err'; return; }
+  var p = authMode==='signup'
+    ? sb.auth.signUp({email:email,password:password})
+    : sb.auth.signInWithPassword({email:email,password:password});
+  p.then(function(res){
+    if(res.error){ msg.textContent=res.error.message; msg.className='banner err'; return; }
+    if(authMode==='signup' && !res.data.session){
+      msg.className='banner info';
+      msg.textContent='Account created. If email confirmation is on, confirm via the email, then sign in.';
+      toggleAuthMode(); return;
+    }
+    session=res.data.session; enterApp();
+  });
+}
+
+function signOut(){ sb.auth.signOut().then(function(){ location.reload(); }); }
+
+function enterApp(){
+  show('app');
+  document.getElementById('whoami').textContent = (session && session.user && session.user.email) || '';
+  document.getElementById('dbUrlShow').textContent = localStorage.getItem('sb_url')||'';
+  loadAll();
+}
+
+/* ============================================================
+   DATA LOAD + CRUD
+============================================================ */
+function loadAll(){
+  var tables=Object.keys(cache);
+  var jobs=tables.map(function(t){
+    return sb.from(t).select('*').order('animal_id',{ascending:true}).then(function(res){
+      if(res.error){ flash('Error loading '+t+': '+res.error.message,'err'); cache[t]=[]; }
+      else cache[t]=res.data||[];
+    });
+  });
+  return Promise.all(jobs).then(function(){
+    populateDynamicSelectors();
+    renderTables();
+    renderStats();
+    renderCharts();
+  });
+}
+
+function bindForm(formId, table){
+  var form=document.getElementById(formId);
+  form.addEventListener('submit', function(e){
+    e.preventDefault();
+    var fd=new FormData(form);
+    var rec={};
+    COLS[table].forEach(function(col){
+      var v=fd.get(col);
+      if(v===null) return;
+      v=(''+v).trim();
+      rec[col]= v==='' ? null : (isNumericCol(table,col) ? Number(v) : v);
+    });
+    var id=fd.get('id');
+    var p = id ? sb.from(table).update(rec).eq('id',id) : sb.from(table).insert([rec]);
+    p.then(function(res){
+      if(res.error){ flash('Save failed: '+res.error.message,'err'); return; }
+      flash('Saved.','ok');
+      resetForm(formId);
+      loadAll();
+    });
+  });
+}
+
+function isNumericCol(table,col){
+  if(['animal_id','test_date','grp','timepoint','notes','tissue','population','unit','marker','region'].indexOf(col)>=0) return false;
+  return true;
+}
+
+function resetForm(formId){ var f=document.getElementById(formId); f.reset(); f.elements['id'].value=''; }
+
+function editRow(table, id){
+  var rec=cache[table].filter(function(r){return r.id===id;})[0]; if(!rec) return;
+  var formId={ogtt:'ogttForm',plasma:'plasmaForm',flow_cytometry:'flowForm',ihc:'ihcForm'}[table];
+  var form=document.getElementById(formId);
+  form.elements['id'].value=rec.id;
+  COLS[table].forEach(function(col){ if(form.elements[col]) form.elements[col].value = rec[col]==null?'':rec[col]; });
+  var tab={ogtt:'ogtt',plasma:'plasma',flow_cytometry:'flow',ihc:'ihc'}[table];
+  document.querySelector('nav.tabs button[data-tab="'+tab+'"]').click();
+  form.scrollIntoView({behavior:'smooth'});
+}
+
+function deleteRow(table,id){
+  if(!confirm('Delete this record permanently?')) return;
+  sb.from(table).delete().eq('id',id).then(function(res){
+    if(res.error){ flash('Delete failed: '+res.error.message,'err'); return; }
+    flash('Deleted.','ok'); loadAll();
+  });
+}
+
+/* ============================================================
+   TABLES
+============================================================ */
+function renderTables(){
+  buildTable('ogttTable','ogtt');
+  buildTable('plasmaTable','plasma');
+  buildTable('flowTable','flow_cytometry');
+  buildTable('ihcTable','ihc');
+}
+function buildTable(tid, table){
+  var el=document.getElementById(tid); var cols=COLS[table]; var rows=cache[table];
+  if(!rows.length){ el.innerHTML='<tbody><tr><td class="muted">No records yet.</td></tr></tbody>'; return; }
+  var head='<thead><tr>'+cols.map(function(c){return '<th>'+c.replace(/_/g,' ')+'</th>';}).join('')+'<th></th></tr></thead>';
+  var body='<tbody>'+rows.map(function(r){
+    var cells=cols.map(function(c){
+      if(c==='grp') return '<td><span class="pill '+(r.grp||'')+'">'+(r.grp||'')+'</span></td>';
+      return '<td>'+(r[c]==null?'':escapeHtml(''+r[c]))+'</td>';
+    }).join('');
+    return '<tr>'+cells+'<td><div class="row-actions">'+
+      '<button class="btn ghost sm" onclick="editRow(\''+table+'\',\''+r.id+'\')">Edit</button>'+
+      '<button class="btn danger sm" onclick="deleteRow(\''+table+'\',\''+r.id+'\')">Del</button>'+
+      '</div></td></tr>';
+  }).join('')+'</tbody>';
+  el.innerHTML=head+body;
+}
+
+/* ============================================================
+   DYNAMIC SELECTORS
+============================================================ */
+function populateDynamicSelectors(){
+  fillSel('flowPop', distinct(cache.flow_cytometry,'population'), 'No populations yet');
+  fillSel('flowTissue', ['All tissues'].concat(distinct(cache.flow_cytometry,'tissue')), null);
+  fillSel('ihcMarker', distinct(cache.ihc,'marker'), 'No markers yet');
+}
+function fillSel(id, items, emptyLabel){
+  var el=document.getElementById(id); if(!el) return;
+  var prev=el.value;
+  if(!items.length){ el.innerHTML='<option value="">'+(emptyLabel||'-')+'</option>'; return; }
+  el.innerHTML=items.map(function(i){return '<option value="'+escapeHtml(i)+'">'+escapeHtml(i)+'</option>';}).join('');
+  if(items.indexOf(prev)>=0) el.value=prev;
+}
+function distinct(rows,key){
+  var seen={}, out=[];
+  rows.forEach(function(r){ var v=r[key]; if(v && !seen[v]){ seen[v]=1; out.push(v); } });
+  return out.sort();
+}
+
+/* ============================================================
+   STATS HELPERS
+============================================================ */
+function meanSem(vals){
+  var v=vals.filter(function(x){return x!=null && !isNaN(x);}).map(Number);
+  var n=v.length; if(!n) return {mean:null,sem:0,n:0};
+  var m=v.reduce(function(a,b){return a+b;},0)/n;
+  if(n<2) return {mean:m,sem:0,n:n};
+  var sd=Math.sqrt(v.reduce(function(a,b){return a+(b-m)*(b-m);},0)/(n-1));
+  return {mean:m,sem:sd/Math.sqrt(n),n:n};
+}
+function auc(times,vals){
+  var a=0;
+  for(var i=1;i<times.length;i++){
+    var y1=vals[i-1], y2=vals[i];
+    if(y1==null||y2==null||isNaN(y1)||isNaN(y2)) continue;
+    a+=(times[i]-times[i-1])*(Number(y1)+Number(y2))/2;
+  }
+  return a;
+}
+function rowsFor(table,grp,tp){
+  return cache[table].filter(function(r){ return r.grp===grp && (tp==null||r.timepoint===tp); });
+}
+
+/* ============================================================
+   CHARTS
+============================================================ */
+function draw(id,config){
+  var el=document.getElementById(id); if(!el) return;
+  if(charts[id]) charts[id].destroy();
+  charts[id]=new Chart(el,config);
+}
+function barOpts(yTitle){
+  return {responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{position:'top'}},
+    scales:{y:{title:{display:!!yTitle,text:yTitle},beginAtZero:true}}};
+}
+
+function renderCharts(){
+  if(typeof Chart==='undefined') return;
+  renderOverviewChart();
+  renderOgttCurve();
+  renderOgttAuc();
+  renderBodyWeight();
+  renderAnalyte();
+  renderFlow();
+  renderIhc();
+}
+
+function renderOverviewChart(){
+  var assays=[['ogtt','OGTT'],['plasma','Plasma'],['flow_cytometry','Flow'],['ihc','IHC']];
+  draw('overviewChart',{type:'bar',
+    data:{labels:assays.map(function(a){return a[1];}),
+      datasets:GROUPS.map(function(g){return {label:g.code,backgroundColor:g.color,
+        data:assays.map(function(a){return cache[a[0]].filter(function(r){return r.grp===g.code;}).length;})};})},
+    options:barOpts('records')});
+}
+
+function renderOgttCurve(){
+  var tp=document.getElementById('ogttTp').value;
+  var datasets=GROUPS.map(function(g){
+    var rows=rowsFor('ogtt',g.code,tp);
+    var data=OGTT_KEYS.map(function(k){ return meanSem(rows.map(function(r){return r[k];})).mean; });
+    return {label:g.code,borderColor:g.color,backgroundColor:g.color,tension:.25,spanGaps:true,data:data};
+  });
+  draw('ogttCurve',{type:'line',
+    data:{labels:OGTT_TIMES,datasets:datasets},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{position:'top'}},
+      scales:{x:{title:{display:true,text:'Time (min)'}},
+              y:{title:{display:true,text:'Blood glucose'},beginAtZero:false}}}});
+}
+
+function renderOgttAuc(){
+  var tp=document.getElementById('ogttTp').value;
+  var means=GROUPS.map(function(g){
+    var rows=rowsFor('ogtt',g.code,tp);
+    var aucs=rows.map(function(r){
+      var vals=OGTT_KEYS.map(function(k){return r[k];});
+      if(vals.every(function(v){return v==null;})) return null;
+      return auc(OGTT_TIMES,vals);
+    }).filter(function(x){return x!=null;});
+    return meanSem(aucs);
+  });
+  draw('ogttAuc',{type:'bar',
+    data:{labels:GROUPS.map(function(g){return g.code;}),
+      datasets:[{label:'Glucose AUC ('+tp+')',
+        backgroundColor:GROUPS.map(function(g){return g.color;}),
+        data:means.map(function(s){return s.mean;})}]},
+    options:barOpts('AUC (glucose*min)')});
+}
+
+function renderBodyWeight(){
+  draw('bwChart',{type:'line',
+    data:{labels:TIMEPOINTS,
+      datasets:GROUPS.map(function(g){return {label:g.code,borderColor:g.color,backgroundColor:g.color,tension:.2,spanGaps:true,
+        data:TIMEPOINTS.map(function(tp){return meanSem(rowsFor('ogtt',g.code,tp).map(function(r){return r.body_weight;})).mean;})};})},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'}},
+      scales:{y:{title:{display:true,text:'Body weight (g)'},beginAtZero:false}}}});
+}
+
+function renderAnalyte(){
+  var key=document.getElementById('analyteKey').value;
+  var found=ANALYTES.filter(function(a){return a.key===key;})[0];
+  var label=found?found.label:key;
+  draw('analyteChart',{type:'bar',
+    data:{labels:TIMEPOINTS,
+      datasets:GROUPS.map(function(g){return {label:g.code,backgroundColor:g.color,
+        data:TIMEPOINTS.map(function(tp){return meanSem(rowsFor('plasma',g.code,tp).map(function(r){return r[key];})).mean;})};})},
+    options:barOpts(label+' (mean)')});
+}
+
+function renderFlow(){
+  var pop=document.getElementById('flowPop').value;
+  var tissue=document.getElementById('flowTissue').value;
+  function filt(rows){ return (tissue&&tissue!=='All tissues') ? rows.filter(function(r){return r.tissue===tissue;}) : rows; }
+  draw('flowChart',{type:'bar',
+    data:{labels:TIMEPOINTS,
+      datasets:GROUPS.map(function(g){return {label:g.code,backgroundColor:g.color,
+        data:TIMEPOINTS.map(function(tp){
+          var rows=filt(rowsFor('flow_cytometry',g.code,tp)).filter(function(r){return r.population===pop;});
+          return meanSem(rows.map(function(r){return r.value;})).mean;
+        })};})},
+    options:barOpts(pop||'value')});
+}
+
+function renderIhc(){
+  var marker=document.getElementById('ihcMarker').value;
+  draw('ihcChart',{type:'bar',
+    data:{labels:GROUPS.map(function(g){return g.code;}),
+      datasets:[{label:marker||'marker',backgroundColor:GROUPS.map(function(g){return g.color;}),
+        data:GROUPS.map(function(g){return meanSem(cache.ihc.filter(function(r){return r.grp===g.code && r.marker===marker;}).map(function(r){return r.value;})).mean;})}]},
+    options:barOpts(marker||'value')});
+}
+
+/* ============================================================
+   OVERVIEW STATS + COMPLETENESS
+============================================================ */
+function renderStats(){
+  var total=0; Object.keys(cache).forEach(function(t){ total+=cache[t].length; });
+  var animals={};
+  Object.keys(cache).forEach(function(t){ cache[t].forEach(function(r){ if(r.animal_id) animals[r.animal_id]=1; }); });
+  var cards=[
+    {n:total,l:'Total records'},
+    {n:Object.keys(animals).length,l:'Unique animals'},
+    {n:cache.ogtt.length,l:'OGTT tests'},
+    {n:cache.plasma.length,l:'Plasma samples'},
+    {n:cache.flow_cytometry.length,l:'Flow rows'},
+    {n:cache.ihc.length,l:'IHC rows'}
+  ];
+  document.getElementById('statGrid').innerHTML=cards.map(function(c){return '<div class="stat"><div class="n">'+c.n+'</div><div class="l">'+c.l+'</div></div>';}).join('');
+
+  var head='<thead><tr><th>Group</th>'+TIMEPOINTS.map(function(t){return '<th>'+t+'</th>';}).join('')+'</tr></thead>';
+  var body='<tbody>'+GROUPS.map(function(g){
+    var tds=TIMEPOINTS.map(function(tp){
+      var a={};
+      ['ogtt','plasma','flow_cytometry','ihc'].forEach(function(t){
+        cache[t].filter(function(r){return r.grp===g.code&&r.timepoint===tp;}).forEach(function(r){ if(r.animal_id) a[r.animal_id]=1; });
+      });
+      var c=Object.keys(a).length;
+      return '<td>'+(c? c+' animal(s)' : '<span class="muted">-</span>')+'</td>';
+    }).join('');
+    return '<tr><td><span class="pill '+g.code+'">'+g.code+'</span></td>'+tds+'</tr>';
+  }).join('')+'</tbody>';
+  document.getElementById('completeTable').innerHTML=head+body;
+}
+
+/* ============================================================
+   EXPORT / IMPORT
+============================================================ */
+function csvCell(v){ if(v==null) return ''; var s=''+v; return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s; }
+function exportCsv(table){
+  var cols=COLS[table]; var rows=cache[table];
+  var lines=[cols.join(',')].concat(rows.map(function(r){return cols.map(function(c){return csvCell(r[c]);}).join(',');}));
+  downloadBlob(lines.join('\n'),table+'_'+today()+'.csv','text/csv');
+}
+function exportJson(){ downloadBlob(JSON.stringify(cache,null,2),'research_backup_'+today()+'.json','application/json'); }
+function downloadBlob(content,name,type){
+  var a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([content],{type:type}));
+  a.download=name; document.body.appendChild(a); a.click(); a.remove();
+}
+function importJson(){
+  var f=document.getElementById('importFile').files[0];
+  var msg=document.getElementById('importMsg');
+  if(!f){ msg.textContent='Choose a JSON backup file first.'; return; }
+  f.text().then(function(text){
+    var obj; try{ obj=JSON.parse(text); }catch(e){ msg.textContent='Not valid JSON.'; return; }
+    var tables=Object.keys(cache); var idx=0, added=0;
+    function next(){
+      if(idx>=tables.length){ msg.textContent='Imported '+added+' records.'; loadAll(); return; }
+      var t=tables[idx++];
+      if(!Array.isArray(obj[t])||!obj[t].length){ next(); return; }
+      var rows=obj[t].map(function(r){ var o={}; COLS[t].forEach(function(c){ if(r[c]!==undefined) o[c]=r[c]; }); return o; });
+      sb.from(t).insert(rows).then(function(res){
+        if(res.error){ msg.textContent='Import error on '+t+': '+res.error.message; return; }
+        added+=rows.length; next();
+      });
+    }
+    next();
+  });
+}
+
+/* ============================================================
+   UTIL
+============================================================ */
+function flash(text,type){
+  var el=document.getElementById('globalMsg');
+  el.textContent=text; el.className='banner '+(type==='err'?'err':'ok');
+  clearTimeout(flash._t); flash._t=setTimeout(function(){el.classList.add('hide');},3500);
+}
+function escapeHtml(s){ return s.replace(/[&<>"']/g,function(m){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m];}); }
+function today(){ return new Date().toISOString().slice(0,10); }
+</script>
+</body>
+</html>
