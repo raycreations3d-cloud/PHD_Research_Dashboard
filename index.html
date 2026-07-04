@@ -155,7 +155,7 @@
   <header class="top">
     <div>
       <h1>Obesity x Breast Cancer - Research Dashboard</h1>
-      <div class="sub">Inflammatory &amp; immune profiling across cancer progression - transgenic murine model &middot; build 13</div>
+      <div class="sub">Inflammatory &amp; immune profiling across cancer progression - transgenic murine model &middot; build 14</div>
     </div>
     <div class="userbox">
       <span id="whoami"></span>
@@ -1122,7 +1122,7 @@ function sortMice(key){
   renderMice();
 }
 function miceHead(){
-  var cols=[['animal_id','Animal ID'],['grp','Group'],['timepoint','Timepoint'],['tumour_site','Tumour site'],['palpable_date','Palpable date'],['dob','DOB'],['records','Records']];
+  var cols=[['animal_id','Animal ID'],['grp','Group'],['timepoint','Timepoint'],['tumour_site','Primary tumour(s)'],['tumour_site_fixed','Fixed tumour site(s)'],['dob','Date of birth'],['palpable_date','Date of palpable'],['termination_date','Date of termination'],['records','Records']];
   var h='<thead><tr>';
   for(var i=0;i<cols.length;i++){
     var key=cols[i][0], lbl=cols[i][1];
@@ -1166,13 +1166,17 @@ function renderMice(){
     return va<vb?-1*dir:(va>vb?1*dir:0);
   });
 
-  if(!rows.length){ el.innerHTML=miceHead()+'<tbody><tr><td class="muted" colspan="8">No mice match your filter.</td></tr></tbody>'; return; }
+  if(!rows.length){ el.innerHTML=miceHead()+'<tbody><tr><td class="muted" colspan="10">No mice match your filter.</td></tr></tbody>'; return; }
 
   var body='<tbody>'+rows.map(function(m){
     return '<tr><td><b>'+escapeHtml(m.animal_id)+'</b></td>'+
       '<td>'+(m.grp?'<span class="pill '+m.grp+'">'+m.grp+'</span>':'<span class="muted">-</span>')+'</td>'+
       '<td>'+escapeHtml(m.timepoint||'')+'</td>'+
-      '<td>'+escapeHtml(m.tumour_site||'')+'</td><td>'+escapeHtml(isoToDMY(m.palpable_date))+'</td><td>'+escapeHtml(isoToDMY(m.dob))+'</td>'+
+      '<td>'+escapeHtml(m.tumour_site||'')+'</td>'+
+      '<td>'+escapeHtml(m.tumour_site_fixed||'')+'</td>'+
+      '<td>'+escapeHtml(isoToDMY(m.dob))+'</td>'+
+      '<td>'+escapeHtml(isoToDMY(m.palpable_date))+'</td>'+
+      '<td>'+escapeHtml(isoToDMY(m.termination_date))+'</td>'+
       '<td>'+recordCount(m.animal_id)+'</td>'+
       '<td class="miceact"><div class="row-actions">'+
         '<button class="iconbtn" title="Open" onclick="openMouse(\''+jsstr(m.animal_id)+'\')">'+IC_EYE+'</button>'+
