@@ -155,7 +155,7 @@
   <header class="top">
     <div>
       <h1>Obesity x Breast Cancer - Research Dashboard</h1>
-      <div class="sub">Inflammatory &amp; immune profiling across cancer progression - transgenic murine model &middot; build 22</div>
+      <div class="sub">Inflammatory &amp; immune profiling across cancer progression - transgenic murine model &middot; build 24</div>
     </div>
     <div class="userbox">
       <span id="whoami"></span>
@@ -513,6 +513,12 @@
         <div id="importMsg" class="muted" style="margin-top:8px"></div>
       </div>
       <div class="card">
+        <h2>Auto-backup (this browser)</h2>
+        <p class="hint">A full snapshot (all tables incl. mice) is saved automatically every time the app loads, kept only in this browser. Download or restore a recent state here.</p>
+        <div id="autobakBox"></div>
+        <div id="autobakMsg" class="muted" style="margin-top:8px"></div>
+      </div>
+      <div class="card">
         <h2>Connection</h2>
         <p class="hint">Database: <code id="dbUrlShow"></code></p>
         <div class="row-actions"><button class="btn ghost sm" onclick="forgetConfig()">Disconnect / change database</button></div>
@@ -798,6 +804,7 @@ function loadAll(){
     renderTables();
     renderStats();
     renderCharts();
+    autoBackup();
     if(currentMouse && !document.getElementById('mouseProfile').classList.contains('hide')) openMouse(currentMouse);
   });
 }
@@ -1552,28 +1559,32 @@ function saveAll(){
     ['ogttForm','ogttForm2'].forEach(function(fid){
       var o=buildOgttRec(fid); if(o.bad){ bad=true; return; }
       if(!o.rec.animal_id) return;
-      var oid=o.id;
-      if(!oid){ var ex=cache.ogtt.filter(function(r){return String(r.animal_id)===String(o.rec.animal_id) && (r.timepoint||'')===(o.rec.timepoint||'');})[0]; if(ex) oid=ex.id; }
-      if(oid){ jobs.push(sb.from('ogtt').update(o.rec).eq('id',oid).select()); }
-      else if(ogttHasData(o.rec)){ jobs.push(sb.from('ogtt').insert([o.rec]).select()); }
+      if(o.id){ jobs.push(sb.from('ogtt').update(o.rec).eq('id',o.id).select()); return; }
+      if(!ogttHasData(o.rec)) return;                 // empty form -> never overwrite
+      var ex=cache.ogtt.filter(function(r){return String(r.animal_id)===String(o.rec.animal_id) && (r.timepoint||'')===(o.rec.timepoint||'');})[0];
+      if(ex){ jobs.push(sb.from('ogtt').update(o.rec).eq('id',ex.id).select()); }
+      else  { jobs.push(sb.from('ogtt').insert([o.rec]).select()); }
     });
     [['plasmaForm','plasma'],['flowForm','flow_cytometry'],['ihcForm','ihc']].forEach(function(p){
       var r=buildAssayRec(p[0], p[1]); if(r.bad){ bad=true; return; }
       if(!r.rec.animal_id) return;
-      var rid=r.id;
-      if(!rid && p[1]==='plasma'){ var ex=cache.plasma.filter(function(x){return String(x.animal_id)===String(r.rec.animal_id) && (x.timepoint||'')===(r.rec.timepoint||'');})[0]; if(ex) rid=ex.id; }
+      if(r.id){ jobs.push(sb.from(p[1]).update(r.rec).eq('id',r.id).select()); return; }
+      if(!hasAssayData(p[1], r.rec)) return;          // empty form -> never overwrite
+      var rid=null;
+      if(p[1]==='plasma'){ var ex=cache.plasma.filter(function(x){return String(x.animal_id)===String(r.rec.animal_id) && (x.timepoint||'')===(r.rec.timepoint||'');})[0]; if(ex) rid=ex.id; }
       if(rid){ jobs.push(sb.from(p[1]).update(r.rec).eq('id',rid).select()); }
-      else if(hasAssayData(p[1], r.rec)){ jobs.push(sb.from(p[1]).insert([r.rec]).select()); }
+      else   { jobs.push(sb.from(p[1]).insert([r.rec]).select()); }
     });
     (function(){
       var t=buildAssayRec('terminationForm','termination'); if(t.bad){ bad=true; return; }
       if(!t.rec.animal_id) return;
       var _tt=getMultiSelect(document.getElementById('termTumoursTop')); t.rec.tumours_top=_tt.length?_tt.join(', '):null;
       var _tb=getMultiSelect(document.getElementById('termTumoursBottom')); t.rec.tumours_bottom=_tb.length?_tb.join(', '):null;
-      var tid=t.id;
-      if(!tid){ var ex=cache.termination.filter(function(x){return String(x.animal_id)===String(t.rec.animal_id);})[0]; if(ex) tid=ex.id; }
-      if(tid){ jobs.push(sb.from('termination').update(t.rec).eq('id',tid).select()); }
-      else if(hasAssayData('termination', t.rec)){ jobs.push(sb.from('termination').insert([t.rec]).select()); }
+      if(t.id){ jobs.push(sb.from('termination').update(t.rec).eq('id',t.id).select()); return; }
+      if(!hasAssayData('termination', t.rec)) return;  // empty form -> never overwrite
+      var ex=cache.termination.filter(function(x){return String(x.animal_id)===String(t.rec.animal_id);})[0];
+      if(ex){ jobs.push(sb.from('termination').update(t.rec).eq('id',ex.id).select()); }
+      else  { jobs.push(sb.from('termination').insert([t.rec]).select()); }
     })();
     if(bad){ flash('Check the date - use dd/mm/yyyy.','err'); return; }
     Promise.all(jobs).then(function(res){
@@ -1603,7 +1614,7 @@ function exportCsv(table){
   var lines=[cols.join(',')].concat(rows.map(function(r){return cols.map(function(c){return csvCell(r[c]);}).join(',');}));
   downloadBlob(lines.join('\n'),table+'_'+today()+'.csv','text/csv');
 }
-function exportJson(){ downloadBlob(JSON.stringify(cache,null,2),'research_backup_'+today()+'.json','application/json'); }
+function exportJson(){ var full={}; Object.keys(cache).forEach(function(t){ full[t]=cache[t]; }); full.animals=animalsCache; downloadBlob(JSON.stringify(full,null,2),'research_backup_'+today()+'.json','application/json'); }
 function downloadBlob(content,name,type){
   var a=document.createElement('a');
   a.href=URL.createObjectURL(new Blob([content],{type:type}));
@@ -1615,19 +1626,61 @@ function importJson(){
   if(!f){ msg.textContent='Choose a JSON backup file first.'; return; }
   f.text().then(function(text){
     var obj; try{ obj=JSON.parse(text); }catch(e){ msg.textContent='Not valid JSON.'; return; }
-    var tables=Object.keys(cache); var idx=0, added=0;
-    function next(){
-      if(idx>=tables.length){ msg.textContent='Imported '+added+' records.'; loadAll(); return; }
-      var t=tables[idx++];
-      if(!Array.isArray(obj[t])||!obj[t].length){ next(); return; }
-      var rows=obj[t].map(function(r){ var o={}; COLS[t].forEach(function(c){ if(r[c]!==undefined) o[c]=r[c]; }); return o; });
-      sb.from(t).insert(rows).then(function(res){
-        if(res.error){ msg.textContent='Import error on '+t+': '+res.error.message; return; }
-        added+=rows.length; next();
-      });
-    }
-    next();
+    importObject(obj, msg);
   });
+}
+function importObject(obj, msg){
+  var tables=Object.keys(cache).concat('animals'); var idx=0, added=0;
+  function colsFor(t){ return t==='animals'?ANIMAL_COLS:COLS[t]; }
+  function next(){
+    if(idx>=tables.length){ if(msg) msg.textContent='Imported '+added+' records.'; loadAll(); return; }
+    var t=tables[idx++];
+    if(!Array.isArray(obj[t])||!obj[t].length){ next(); return; }
+    var rows=obj[t].map(function(r){ var o={}; colsFor(t).forEach(function(c){ if(r[c]!==undefined) o[c]=r[c]; }); return o; });
+    sb.from(t).insert(rows).then(function(res){
+      if(res.error){ if(msg) msg.textContent='Import error on '+t+': '+res.error.message; return; }
+      added+=rows.length; next();
+    });
+  }
+  next();
+}
+function autoBackupKey(){ return 'autobak::'+(localStorage.getItem('sb_url')||''); }
+function autoBackup(){
+  try{
+    var full={}; Object.keys(cache).forEach(function(t){ full[t]=cache[t]; }); full.animals=animalsCache;
+    var n=0; Object.keys(full).forEach(function(t){ n+=(full[t]||[]).length; });
+    if(n===0){ renderAutoBackups(); return; }
+    var key=autoBackupKey(), arr=[];
+    try{ arr=JSON.parse(localStorage.getItem(key)||'[]'); }catch(e){ arr=[]; }
+    var js=JSON.stringify(full);
+    if(arr.length && arr[arr.length-1].js===js){ renderAutoBackups(); return; }
+    arr.push({ts:new Date().toISOString(), n:n, js:js});
+    while(arr.length>15) arr.shift();
+    try{ localStorage.setItem(key, JSON.stringify(arr)); }
+    catch(e){ while(arr.length>3){ arr.shift(); try{ localStorage.setItem(key, JSON.stringify(arr)); break; }catch(e2){} } }
+    renderAutoBackups();
+  }catch(e){}
+}
+function renderAutoBackups(){
+  var host=document.getElementById('autobakBox'); if(!host) return;
+  var arr=[]; try{ arr=JSON.parse(localStorage.getItem(autoBackupKey())||'[]'); }catch(e){}
+  if(!arr.length){ host.innerHTML='<p class="muted" style="margin:0">No auto-backups yet - they appear after the app loads your data.</p>'; return; }
+  var opts=[]; for(var k=arr.length-1;k>=0;k--){ opts.push('<option value="'+k+'">'+arr[k].ts.replace('T',' ').slice(0,19)+'  ('+arr[k].n+' records)</option>'); }
+  host.innerHTML='<p class="hint" style="margin:0 0 8px">'+arr.length+' restore point(s) saved. Latest: '+arr[arr.length-1].ts.replace('T',' ').slice(0,19)+'.</p>'+
+    '<div class="toolbar"><div class="field" style="min-width:280px"><label>Choose a restore point</label><select id="autobakSel">'+opts.join('')+'</select></div></div>'+
+    '<div class="row-actions"><button class="btn sec" type="button" onclick="downloadAutoBackup()">Download selected</button> <button class="btn ghost" type="button" onclick="restoreAutoBackup()">Restore selected into database</button></div>';
+}
+function downloadAutoBackup(){
+  var arr=[]; try{ arr=JSON.parse(localStorage.getItem(autoBackupKey())||'[]'); }catch(e){}
+  var sel=document.getElementById('autobakSel'); var i=sel?+sel.value:-1;
+  if(!arr[i]) return; downloadBlob(arr[i].js, 'autobackup_'+arr[i].ts.slice(0,19).replace(/[:T]/g,'-')+'.json','application/json');
+}
+function restoreAutoBackup(){
+  var arr=[]; try{ arr=JSON.parse(localStorage.getItem(autoBackupKey())||'[]'); }catch(e){}
+  var sel=document.getElementById('autobakSel'); var i=sel?+sel.value:-1;
+  if(!arr[i]) return;
+  if(!confirm('Restore this backup? It RE-INSERTS the backed-up rows as NEW records (it does not delete current rows), so you may create duplicates if the data still exists. Continue?')) return;
+  importObject(JSON.parse(arr[i].js), document.getElementById('autobakMsg'));
 }
 
 /* ============================================================
