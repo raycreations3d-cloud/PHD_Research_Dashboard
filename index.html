@@ -116,6 +116,11 @@
   .mtint{min-width:92px;text-align:center;border:1px solid var(--line);border-radius:8px;padding:8px 6px;background:#fff}
   .mtint .lbl{font-size:11px;color:var(--muted)}
   .mtint .val{font-size:19px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:.5px}
+  .mtint .fin{font-size:10px;color:var(--muted);margin-top:3px;min-height:12px}
+  .mtint .fin.paused{color:#b45309;font-weight:700;text-transform:uppercase;letter-spacing:.5px}
+  .mtnowbox{text-align:center;background:#f3ecfb;border:1px solid var(--accent);border-radius:10px;padding:6px 14px}
+  .mtnowlbl{font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--accent);font-weight:600}
+  .mtclock{font-size:26px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:1px;color:var(--accent);line-height:1.1}
   .mtint{background:#f8fafc;border-color:#e2e8f0}
   .mtint.run{background:#f3ecfb;border-color:var(--accent)}
   .mtint.run .val{color:var(--accent)}
@@ -170,7 +175,7 @@
   <header class="top">
     <div>
       <h1>Obesity x Breast Cancer - Research Dashboard</h1>
-      <div class="sub">Inflammatory &amp; immune profiling across cancer progression - transgenic murine model &middot; build 35</div>
+      <div class="sub">Inflammatory &amp; immune profiling across cancer progression - transgenic murine model &middot; build 40</div>
     </div>
     <div class="userbox">
       <span id="whoami"></span>
@@ -530,7 +535,13 @@
     <!-- ===== MICE TIMER ===== -->
     <section id="tab-micetimer" class="tabpage">
       <div class="card">
-        <h2>Mice Timer</h2>
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+          <h2 style="margin:0">Mice Timer</h2>
+          <div class="mtnowbox">
+            <div class="mtnowlbl">Current time</div>
+            <div class="mtclock" id="mtNow"></div>
+          </div>
+        </div>
         <p class="hint">Add mice, then press Start to run all their intervals (15 / 30 / 60 / 90 / 120 min) counting down together. Run several mice at once; pause or reset per mouse. Timers keep running even if you reload the page.</p>
         <div class="toolbar">
           <div class="field"><label>Mouse ID</label><input id="mtNewId" placeholder="e.g. 27" onkeydown="if(event.key==='Enter')mtAdd()"></div>
@@ -1740,6 +1751,8 @@ function mtClearBeeps(id){ for(var k in mtBeepState){ if(k.indexOf(id+'-')===0) 
 function mtKey(){ return 'micetimers::'+(localStorage.getItem('sb_url')||''); }
 function mtLoad(){ try{ mtTimers=JSON.parse(localStorage.getItem(mtKey())||'[]')||[]; }catch(e){ mtTimers=[]; } }
 function mtSave(){ try{ localStorage.setItem(mtKey(), JSON.stringify(mtTimers)); }catch(e){} }
+function mtPad(n){ return (n<10?'0':'')+n; }
+function mtClock(ms,withSec){ var dt=new Date(ms); var s=mtPad(dt.getHours())+':'+mtPad(dt.getMinutes()); if(withSec) s+=':'+mtPad(dt.getSeconds()); return s; }
 function mtFind(id){ for(var i=0;i<mtTimers.length;i++){ if(mtTimers[i].id===id) return mtTimers[i]; } return null; }
 function mtElapsed(t){ return (t.accumMs||0) + (t.runningSince? (Date.now()-t.runningSince) : 0); }
 function mtFmt(sec){ sec=Math.max(0,Math.ceil(sec)); var m=Math.floor(sec/60), s=sec%60; return m+':'+(s<10?'0':'')+s; }
@@ -1750,9 +1763,9 @@ function mtAdd(){
   if(el){ el.value=''; el.focus(); }
   mtSave(); renderMiceTimers();
 }
-function mtStart(id){ mtEnsureAudio(); var t=mtFind(id); if(t && !t.runningSince){ mtClearBeeps(id); t.runningSince=Date.now(); mtSave(); renderMiceTimers(); } }
+function mtStart(id){ mtEnsureAudio(); var t=mtFind(id); if(t && !t.runningSince){ mtClearBeeps(id); if(!t.startedAt) t.startedAt=Date.now(); t.runningSince=Date.now(); mtSave(); renderMiceTimers(); } }
 function mtPause(id){ var t=mtFind(id); if(t && t.runningSince){ t.accumMs=(t.accumMs||0)+(Date.now()-t.runningSince); t.runningSince=null; mtSave(); renderMiceTimers(); } }
-function mtReset(id){ var t=mtFind(id); if(t){ mtClearBeeps(id); t.accumMs=0; t.runningSince=null; mtSave(); renderMiceTimers(); } }
+function mtReset(id){ var t=mtFind(id); if(t){ mtClearBeeps(id); t.accumMs=0; t.runningSince=null; t.startedAt=null; mtSave(); renderMiceTimers(); } }
 function mtRemove(id){ mtTimers=mtTimers.filter(function(t){return t.id!==id;}); mtSave(); renderMiceTimers(); }
 function mtResetAll(){ if(!mtTimers.length) return; if(!confirm('Reset all timers to zero?')) return; mtBeepState={}; mtTimers.forEach(function(t){ t.accumMs=0; t.runningSince=null; }); mtSave(); renderMiceTimers(); }
 function mtRemoveAll(){ if(!mtTimers.length) return; if(!confirm('Remove all mice from the timer?')) return; mtTimers=[]; mtBeepState={}; mtSave(); renderMiceTimers(); }
@@ -1762,11 +1775,11 @@ function renderMiceTimers(){
   host.innerHTML=mtTimers.map(function(t){
     var running=!!t.runningSince;
     var ints=MT_INTERVALS.map(function(M){
-      return '<div class="mtint" id="mtint-'+t.id+'-'+M+'"><div class="lbl">'+M+' min</div><div class="val" id="mtval-'+t.id+'-'+M+'">'+M+':00</div></div>';
+      return '<div class="mtint" id="mtint-'+t.id+'-'+M+'"><div class="lbl">'+M+' min</div><div class="val" id="mtval-'+t.id+'-'+M+'">'+M+':00</div><div class="fin" id="mtfin-'+t.id+'-'+M+'"></div></div>';
     }).join('');
     return '<div class="mtcard">'+
       '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">'+
-        '<div><b style="font-size:15px">Mouse '+escapeHtml(t.mouse)+'</b> <span class="muted" id="mtstat-'+t.id+'" style="font-size:12px"></span></div>'+
+        '<div><div><b style="font-size:15px">Mouse '+escapeHtml(t.mouse)+'</b> <span class="muted" id="mtstat-'+t.id+'" style="font-size:12px"></span></div><div class="muted" id="mtstart-'+t.id+'" style="font-size:11px"></div></div>'+
         '<div class="row-actions" style="margin:0">'+
           (running?'<button class="iconbtn" title="Pause" type="button" onclick="mtPause(\''+t.id+'\')">'+IC_PAUSE+'</button>':'<button class="iconbtn go" title="Start" type="button" onclick="mtStart(\''+t.id+'\')">'+IC_PLAY+'</button>')+
           '<button class="iconbtn" title="Reset" type="button" onclick="mtReset(\''+t.id+'\')">'+IC_ROTATE+'</button>'+
@@ -1779,6 +1792,7 @@ function renderMiceTimers(){
   tickTimers();
 }
 function tickTimers(){
+  var nowEl=document.getElementById('mtNow'); if(nowEl) nowEl.textContent=mtClock(Date.now(),true);
   mtTimers.forEach(function(t){
     var elapsedSec=mtElapsed(t)/1000;
     var running=!!t.runningSince, allDone=true;
@@ -1797,11 +1811,15 @@ function tickTimers(){
         else if(running){ box.classList.add('run'); box.classList.remove('warn'); }
         else { box.classList.remove('run'); box.classList.remove('warn'); }
         var rc=Math.ceil(rem);
-        if(running && rem<=5 && mtBeepState[key]!==rc){ mtBeepState[key]=rc; mtBeep(880,0.13); }
+        if(running && rem<=3 && mtBeepState[key]!==rc){ mtBeepState[key]=rc; mtBeep(880,0.13); }
       }
+      var fin=document.getElementById('mtfin-'+t.id+'-'+M);
+      if(fin){ if(rem<=0){ fin.textContent='Done'; fin.className='fin'; } else if(running){ fin.textContent='Ends '+mtClock(Date.now()+rem*1000,true); fin.className='fin'; } else if(t.startedAt){ fin.textContent='Paused'; fin.className='fin paused'; } else { fin.textContent=''; fin.className='fin'; } }
     });
     var st=document.getElementById('mtstat-'+t.id);
     if(st){ st.textContent = running ? (allDone?'- all complete':'- running') : ((t.accumMs>0)?'- paused':''); }
+    var sh=document.getElementById('mtstart-'+t.id);
+    if(sh){ sh.textContent = t.startedAt ? ('Started '+mtClock(t.startedAt,true)) : ''; }
   });
 }
 function mtInit(){ mtLoad(); renderMiceTimers(); if(!window._mtTick){ window._mtTick=setInterval(tickTimers,500); } }
