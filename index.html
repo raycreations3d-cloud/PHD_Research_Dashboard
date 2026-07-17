@@ -116,7 +116,7 @@
   .mtint{min-width:92px;text-align:center;border:1px solid var(--line);border-radius:8px;padding:8px 6px;background:#fff}
   .mtint .lbl{font-size:11px;color:var(--muted)}
   .mtint .val{font-size:19px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:.5px}
-  .mtint .fin{font-size:10px;color:var(--muted);margin-top:3px;min-height:12px}
+  .mtint .fin{font-size:12px;font-weight:700;color:var(--ink);margin-top:4px;min-height:14px}
   .mtint .fin.paused{color:#b45309;font-weight:700;text-transform:uppercase;letter-spacing:.5px}
   .mtnowbox{text-align:center;background:#f3ecfb;border:1px solid var(--accent);border-radius:10px;padding:6px 14px}
   .mtnowlbl{font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--accent);font-weight:600}
@@ -175,7 +175,7 @@
   <header class="top">
     <div>
       <h1>Obesity x Breast Cancer - Research Dashboard</h1>
-      <div class="sub">Inflammatory &amp; immune profiling across cancer progression - transgenic murine model &middot; build 40</div>
+      <div class="sub">Inflammatory &amp; immune profiling across cancer progression - transgenic murine model &middot; build 42</div>
     </div>
     <div class="userbox">
       <span id="whoami"></span>
@@ -1792,7 +1792,7 @@ function renderMiceTimers(){
   tickTimers();
 }
 function tickTimers(){
-  var nowEl=document.getElementById('mtNow'); if(nowEl) nowEl.textContent=mtClock(Date.now(),true);
+  var nowEl=document.getElementById('mtNow'); if(nowEl) nowEl.textContent=mtClock(Date.now(),false);
   mtTimers.forEach(function(t){
     var elapsedSec=mtElapsed(t)/1000;
     var running=!!t.runningSince, allDone=true;
@@ -1814,12 +1814,12 @@ function tickTimers(){
         if(running && rem<=3 && mtBeepState[key]!==rc){ mtBeepState[key]=rc; mtBeep(880,0.13); }
       }
       var fin=document.getElementById('mtfin-'+t.id+'-'+M);
-      if(fin){ if(rem<=0){ fin.textContent='Done'; fin.className='fin'; } else if(running){ fin.textContent='Ends '+mtClock(Date.now()+rem*1000,true); fin.className='fin'; } else if(t.startedAt){ fin.textContent='Paused'; fin.className='fin paused'; } else { fin.textContent=''; fin.className='fin'; } }
+      if(fin){ if(rem<=0){ fin.textContent='Done'; fin.className='fin'; } else if(running){ fin.textContent='Ends '+mtClock(Date.now()+rem*1000,false); fin.className='fin'; } else if(t.startedAt){ fin.textContent='Paused'; fin.className='fin paused'; } else { fin.textContent=''; fin.className='fin'; } }
     });
     var st=document.getElementById('mtstat-'+t.id);
     if(st){ st.textContent = running ? (allDone?'- all complete':'- running') : ((t.accumMs>0)?'- paused':''); }
     var sh=document.getElementById('mtstart-'+t.id);
-    if(sh){ sh.textContent = t.startedAt ? ('Started '+mtClock(t.startedAt,true)) : ''; }
+    if(sh){ sh.textContent = t.startedAt ? ('Started '+mtClock(t.startedAt,false)) : ''; }
   });
 }
 function mtInit(){ mtLoad(); renderMiceTimers(); if(!window._mtTick){ window._mtTick=setInterval(tickTimers,500); } }
