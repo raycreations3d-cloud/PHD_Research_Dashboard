@@ -175,7 +175,7 @@
   <header class="top">
     <div>
       <h1>Obesity x Breast Cancer - Research Dashboard</h1>
-      <div class="sub">Inflammatory &amp; immune profiling across cancer progression - transgenic murine model &middot; build 42</div>
+      <div class="sub">Inflammatory &amp; immune profiling across cancer progression - transgenic murine model &middot; build 43</div>
     </div>
     <div class="userbox">
       <span id="whoami"></span>
@@ -1779,7 +1779,7 @@ function renderMiceTimers(){
     }).join('');
     return '<div class="mtcard">'+
       '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">'+
-        '<div><div><b style="font-size:15px">Mouse '+escapeHtml(t.mouse)+'</b> <span class="muted" id="mtstat-'+t.id+'" style="font-size:12px"></span></div><div class="muted" id="mtstart-'+t.id+'" style="font-size:11px"></div></div>'+
+        '<div><div><b style="font-size:15px">Mouse '+escapeHtml(t.mouse)+'</b> <span class="muted" id="mtstat-'+t.id+'" style="font-size:12px"></span></div><div class="muted" id="mtstart-'+t.id+'" style="font-size:11px;min-height:15px"></div></div>'+
         '<div class="row-actions" style="margin:0">'+
           (running?'<button class="iconbtn" title="Pause" type="button" onclick="mtPause(\''+t.id+'\')">'+IC_PAUSE+'</button>':'<button class="iconbtn go" title="Start" type="button" onclick="mtStart(\''+t.id+'\')">'+IC_PLAY+'</button>')+
           '<button class="iconbtn" title="Reset" type="button" onclick="mtReset(\''+t.id+'\')">'+IC_ROTATE+'</button>'+
